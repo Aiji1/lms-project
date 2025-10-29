@@ -1,0 +1,542 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+
+class JurnalMengajarController extends Controller
+{
+    /**
+     * Display a listing of jurnal mengajar
+     */
+    public function index(Request $request)
+    {
+        try {
+            // Get current user from token
+            $currentUser = null;
+            $token = $request->bearerToken();
+            if ($token) {
+                $currentUser = DB::table('users')
+                    ->where('remember_token', $token)
+                    ->where('status', 'Aktif')
+                    ->first();
+            }
+
+            $perPage = $request->get('per_page', 10);
+            $search = $request->get('search', '');
+            $status = $request->get('status', '');
+            $tanggal = $request->get('tanggal', '');
+            $guru = $request->get('guru', '');
+            $kelas = $request->get('kelas', '');
+
+            $query = DB::table('jurnal_mengajar')
+                ->leftJoin('jadwal_pelajaran', 'jurnal_mengajar.id_jadwal', '=', 'jadwal_pelajaran.id_jadwal')
+                ->leftJoin('mata_pelajaran', 'jadwal_pelajaran.id_mata_pelajaran', '=', 'mata_pelajaran.id_mata_pelajaran')
+                ->leftJoin('guru', 'jadwal_pelajaran.nik_guru', '=', 'guru.nik_guru')
+                ->leftJoin('kelas', 'jadwal_pelajaran.id_kelas', '=', 'kelas.id_kelas')
+                ->select([
+                    'jurnal_mengajar.id_jurnal',
+                    'jurnal_mengajar.id_jadwal',
+                    'jurnal_mengajar.tanggal',
+                    'jurnal_mengajar.status_mengajar',
+                    'jurnal_mengajar.materi_diajarkan',
+                    'jurnal_mengajar.keterangan',
+                    'jurnal_mengajar.jam_input',
+                    'jadwal_pelajaran.nik_guru',
+                    'jadwal_pelajaran.jam_ke',
+                    'jadwal_pelajaran.hari',
+                    'guru.nama_lengkap as nama_guru',
+                    'mata_pelajaran.nama_mata_pelajaran as mata_pelajaran',
+                    'kelas.nama_kelas as kelas'
+                ]);
+
+            // Role-based filtering removed - all teachers can see all journal data
+
+            // Search filter
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('jurnal_mengajar.materi_diajarkan', 'LIKE', "%{$search}%")
+                      ->orWhere('jurnal_mengajar.keterangan', 'LIKE', "%{$search}%")
+                      ->orWhere('mata_pelajaran.nama_mata_pelajaran', 'LIKE', "%{$search}%")
+                      ->orWhere('guru.nama_lengkap', 'LIKE', "%{$search}%");
+                });
+            }
+
+            // Status filter
+            if (!empty($status)) {
+                $query->where('jurnal_mengajar.status_mengajar', $status);
+            }
+
+            // Tanggal filter
+            if (!empty($tanggal)) {
+                $query->whereDate('jurnal_mengajar.tanggal', $tanggal);
+            }
+
+            // Guru filter (only for admin)
+            if (!empty($guru) && (!$currentUser || $currentUser->user_type === 'Admin')) {
+                $query->where('jadwal_pelajaran.nik_guru', $guru);
+            }
+
+            // Kelas filter
+            if (!empty($kelas)) {
+                $query->where('kelas.nama_kelas', 'LIKE', "%{$kelas}%");
+            }
+
+            // Order by tanggal desc, then by jam_ke asc for same day
+            $query->orderBy('jurnal_mengajar.tanggal', 'desc')
+                  ->orderBy('jadwal_pelajaran.jam_ke', 'asc')
+                  ->orderBy('jurnal_mengajar.jam_input', 'desc');
+
+            // Pagination
+            $totalData = $query->count();
+            $jurnalMengajar = $query->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Data jurnal mengajar berhasil diambil',
+                'data' => [
+                    'data' => $jurnalMengajar->items(),
+                    'current_page' => $jurnalMengajar->currentPage(),
+                    'last_page' => $jurnalMengajar->lastPage(),
+                    'per_page' => $jurnalMengajar->perPage(),
+                    'total' => $totalData
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengambil data jurnal mengajar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Store a newly created jurnal mengajar
+     */
+    public function store(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'id_jadwal' => 'required|integer|exists:jadwal_pelajaran,id_jadwal',
+                'tanggal' => 'required|date',
+                'status_mengajar' => 'required|in:Hadir,Tidak_Hadir,Diganti',
+                'materi_diajarkan' => 'required|string|min:10|max:1000',
+                'keterangan' => 'nullable|string|max:500'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validasi gagal',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Get the nik_guru from jadwal_pelajaran
+            $jadwal = DB::table('jadwal_pelajaran')
+                ->where('id_jadwal', $request->id_jadwal)
+                ->first();
+
+            if (!$jadwal) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Jadwal tidak ditemukan'
+                ], 404);
+            }
+
+            // Check if jurnal already exists for this jadwal and date
+            $existingJurnal = DB::table('jurnal_mengajar')
+                ->where('id_jadwal', $request->id_jadwal)
+                ->whereDate('tanggal', $request->tanggal)
+                ->first();
+
+            if ($existingJurnal) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Jurnal mengajar untuk jadwal dan tanggal ini sudah ada'
+                ], 422);
+            }
+
+            $jurnalId = DB::table('jurnal_mengajar')->insertGetId([
+                'id_jadwal' => $request->id_jadwal,
+                'tanggal' => $request->tanggal,
+                'nik_guru' => $jadwal->nik_guru, // Add nik_guru from jadwal
+                'status_mengajar' => $request->status_mengajar,
+                'materi_diajarkan' => $request->materi_diajarkan,
+                'keterangan' => $request->keterangan,
+                'jam_input' => now()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Jurnal mengajar berhasil disimpan',
+                'data' => ['id_jurnal' => $jurnalId]
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan jurnal mengajar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Display the specified jurnal mengajar
+     */
+    public function show($id)
+    {
+        try {
+            $jurnal = DB::table('jurnal_mengajar')
+                ->leftJoin('jadwal_pelajaran', 'jurnal_mengajar.id_jadwal', '=', 'jadwal_pelajaran.id_jadwal')
+                ->leftJoin('mata_pelajaran', 'jadwal_pelajaran.id_mata_pelajaran', '=', 'mata_pelajaran.id_mata_pelajaran')
+                ->leftJoin('guru', 'jadwal_pelajaran.nik_guru', '=', 'guru.nik_guru')
+                ->leftJoin('kelas', 'jadwal_pelajaran.id_kelas', '=', 'kelas.id_kelas')
+                ->leftJoin('tahun_ajaran', 'jadwal_pelajaran.id_tahun_ajaran', '=', 'tahun_ajaran.id_tahun_ajaran')
+                ->select([
+                    'jurnal_mengajar.*',
+                    'jadwal_pelajaran.nik_guru',
+                    'jadwal_pelajaran.hari',
+                    'jadwal_pelajaran.jam_ke',
+                    'guru.nama_lengkap as nama_guru',
+                    'mata_pelajaran.nama_mata_pelajaran as mata_pelajaran',
+                    'mata_pelajaran.kode_mata_pelajaran',
+                    'kelas.nama_kelas as kelas',
+                    'kelas.tingkat',
+                    'tahun_ajaran.tahun_ajaran',
+                    'tahun_ajaran.semester'
+                ])
+                ->where('jurnal_mengajar.id_jurnal', $id)
+                ->first();
+
+            if (!$jurnal) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Jurnal mengajar tidak ditemukan'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Data jurnal mengajar berhasil diambil',
+                'data' => $jurnal
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengambil data jurnal mengajar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update the specified jurnal mengajar
+     */
+    public function update(Request $request, $id)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'id_jadwal' => 'required|integer|exists:jadwal_pelajaran,id_jadwal',
+                'tanggal' => 'required|date',
+                'status_mengajar' => 'required|in:Hadir,Tidak_Hadir,Diganti',
+                'materi_diajarkan' => 'required|string|min:10|max:1000',
+                'keterangan' => 'nullable|string|max:500'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validasi gagal',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Check if jurnal exists
+            $existingJurnal = DB::table('jurnal_mengajar')
+                ->where('id_jurnal', $id)
+                ->first();
+
+            if (!$existingJurnal) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Jurnal mengajar tidak ditemukan'
+                ], 404);
+            }
+
+            // Check if another jurnal exists for this jadwal and date (excluding current)
+            $duplicateJurnal = DB::table('jurnal_mengajar')
+                ->where('id_jadwal', $request->id_jadwal)
+                ->whereDate('tanggal', $request->tanggal)
+                ->where('id_jurnal', '!=', $id)
+                ->first();
+
+            if ($duplicateJurnal) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Jurnal mengajar untuk jadwal dan tanggal ini sudah ada'
+                ], 422);
+            }
+
+            DB::table('jurnal_mengajar')
+                ->where('id_jurnal', $id)
+                ->update([
+                    'id_jadwal' => $request->id_jadwal,
+                    'tanggal' => $request->tanggal,
+                    'status_mengajar' => $request->status_mengajar,
+                    'materi_diajarkan' => $request->materi_diajarkan,
+                    'keterangan' => $request->keterangan
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Jurnal mengajar berhasil diperbarui'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memperbarui jurnal mengajar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Remove the specified jurnal mengajar
+     */
+    public function destroy($id)
+    {
+        try {
+            $jurnal = DB::table('jurnal_mengajar')
+                ->where('id_jurnal', $id)
+                ->first();
+
+            if (!$jurnal) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Jurnal mengajar tidak ditemukan'
+                ], 404);
+            }
+
+            DB::table('jurnal_mengajar')
+                ->where('id_jurnal', $id)
+                ->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Jurnal mengajar berhasil dihapus'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghapus jurnal mengajar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get form data for jurnal mengajar
+     */
+    public function getFormData(Request $request)
+    {
+        try {
+            // Get user from middleware
+            $user = $request->attributes->get('authenticated_user');
+            $userRole = $user->user_type;
+            
+            // Get jadwal pelajaran options
+            $query = DB::table('jadwal_pelajaran')
+                ->leftJoin('mata_pelajaran', 'jadwal_pelajaran.id_mata_pelajaran', '=', 'mata_pelajaran.id_mata_pelajaran')
+                ->leftJoin('guru', 'jadwal_pelajaran.nik_guru', '=', 'guru.nik_guru')
+                ->leftJoin('kelas', 'jadwal_pelajaran.id_kelas', '=', 'kelas.id_kelas')
+                ->leftJoin('tahun_ajaran', 'jadwal_pelajaran.id_tahun_ajaran', '=', 'tahun_ajaran.id_tahun_ajaran')
+                ->select([
+                    'jadwal_pelajaran.id_jadwal',
+                    'mata_pelajaran.nama_mata_pelajaran',
+                    'kelas.nama_kelas',
+                    'jadwal_pelajaran.hari',
+                    'jadwal_pelajaran.jam_ke',
+                    'guru.nama_lengkap as nama_guru',
+                    'tahun_ajaran.tahun_ajaran',
+                    'tahun_ajaran.semester'
+                ])
+                ->where('tahun_ajaran.status', 'Aktif');
+
+            // Filter by teacher for Guru role
+            if ($userRole === 'Guru') {
+                $query->where('guru.nik_guru', $user->reference_id);
+            }
+
+            $jadwalPelajaran = $query
+                ->orderByRaw("FIELD(jadwal_pelajaran.hari, 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat')")
+                ->orderBy('jadwal_pelajaran.jam_ke')
+                ->get();
+
+            // Transform data to show mata pelajaran name instead of day
+            $jadwalPelajaran = $jadwalPelajaran->map(function ($item) {
+                return [
+                    'id_jadwal' => $item->id_jadwal,
+                    'display_name' => $item->nama_mata_pelajaran . ' - ' . $item->nama_kelas . ' (Jam ke-' . $item->jam_ke . ')',
+                    'mata_pelajaran' => $item->nama_mata_pelajaran,
+                    'kelas' => $item->nama_kelas,
+                    'hari' => $item->hari,
+                    'jam_ke' => $item->jam_ke,
+                    'nama_guru' => $item->nama_guru,
+                    'tahun_ajaran' => $item->tahun_ajaran,
+                    'semester' => $item->semester
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Data form berhasil diambil',
+                'data' => [
+                    'jadwal_pelajaran' => $jadwalPelajaran
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengambil data form: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Export jurnal mengajar to Excel
+     */
+    public function export(Request $request)
+    {
+        try {
+            $year = $request->get('year', date('Y'));
+            $month = $request->get('month', date('n'));
+            $guru = $request->get('guru', '');
+            $kelas = $request->get('kelas', '');
+
+            // Build query
+            $query = DB::table('jurnal_mengajar')
+                ->leftJoin('jadwal_pelajaran', 'jurnal_mengajar.id_jadwal', '=', 'jadwal_pelajaran.id_jadwal')
+                ->leftJoin('mata_pelajaran', 'jadwal_pelajaran.id_mata_pelajaran', '=', 'mata_pelajaran.id_mata_pelajaran')
+                ->leftJoin('guru', 'jadwal_pelajaran.nik_guru', '=', 'guru.nik_guru')
+                ->leftJoin('kelas', 'jadwal_pelajaran.id_kelas', '=', 'kelas.id_kelas')
+                ->select([
+                    'jurnal_mengajar.tanggal',
+                    'guru.nama_lengkap as nama_guru',
+                    'mata_pelajaran.nama_mata_pelajaran as mata_pelajaran',
+                    'kelas.nama_kelas as kelas',
+                    'jadwal_pelajaran.jam_ke',
+                    'jurnal_mengajar.status_mengajar',
+                    'jurnal_mengajar.materi_diajarkan',
+                    'jurnal_mengajar.keterangan'
+                ])
+                ->whereYear('jurnal_mengajar.tanggal', $year)
+                ->whereMonth('jurnal_mengajar.tanggal', $month);
+
+            // Apply filters
+            if (!empty($guru)) {
+                $query->where('jadwal_pelajaran.nik_guru', $guru);
+            }
+
+            if (!empty($kelas)) {
+                $query->where('kelas.nama_kelas', 'LIKE', "%{$kelas}%");
+            }
+
+            $data = $query->orderBy('jurnal_mengajar.tanggal', 'asc')
+                         ->orderBy('jadwal_pelajaran.jam_ke', 'asc')
+                         ->get();
+
+            // Create Excel file
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+
+            // Set headers
+            $headers = [
+                'Tanggal',
+                'Guru',
+                'Mata Pelajaran',
+                'Kelas',
+                'Jam Ke',
+                'Status',
+                'Materi Diajarkan',
+                'Keterangan'
+            ];
+
+            $sheet->fromArray($headers, null, 'A1');
+
+            // Style headers
+            $headerStyle = [
+                'font' => ['bold' => true],
+                'fill' => [
+                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => 'E3F2FD']
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN
+                    ]
+                ]
+            ];
+            $sheet->getStyle('A1:H1')->applyFromArray($headerStyle);
+
+            // Add data
+            $row = 2;
+            foreach ($data as $item) {
+                $sheet->setCellValue('A' . $row, date('d/m/Y', strtotime($item->tanggal)));
+                $sheet->setCellValue('B' . $row, $item->nama_guru);
+                $sheet->setCellValue('C' . $row, $item->mata_pelajaran);
+                $sheet->setCellValue('D' . $row, $item->kelas);
+                $sheet->setCellValue('E' . $row, $item->jam_ke);
+                $sheet->setCellValue('F' . $row, str_replace('_', ' ', $item->status_mengajar));
+                $sheet->setCellValue('G' . $row, $item->materi_diajarkan);
+                $sheet->setCellValue('H' . $row, $item->keterangan ?? '');
+                $row++;
+            }
+
+            // Auto-size columns
+            foreach (range('A', 'H') as $column) {
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+            }
+
+            // Add borders to all data
+            if ($row > 2) {
+                $sheet->getStyle('A1:H' . ($row - 1))->getBorders()->getAllBorders()
+                    ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
+            }
+
+            // Create writer and output
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            
+            $monthNames = [
+                1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+                5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+                9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+            ];
+            
+            $filename = 'Jurnal_Mengajar_' . $monthNames[$month] . '_' . $year . '.xlsx';
+
+            return response()->stream(
+                function () use ($writer) {
+                    $writer->save('php://output');
+                },
+                200,
+                [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                    'Cache-Control' => 'max-age=0',
+                ]
+            );
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengekspor data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+}
