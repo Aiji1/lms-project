@@ -164,7 +164,7 @@ export default function Sidebar({ userType, isCollapsed = false }: SidebarProps)
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg mb-1 transition-colors ${
               isActive 
                 ? 'bg-blue-600 text-white' 
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
             }`}
             style={{ paddingLeft: `${12 + (level * 16)}px` }}
             title={isCollapsed ? `${item.label} - ${permissionLabel}` : item.description}
@@ -185,7 +185,7 @@ export default function Sidebar({ userType, isCollapsed = false }: SidebarProps)
             className={`flex items-center justify-between w-full px-3 py-2 rounded-lg mb-1 transition-colors ${
               isActive 
                 ? 'bg-blue-600 text-white' 
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
             }`}
             style={{ paddingLeft: `${12 + (level * 16)}px` }}
             title={isCollapsed ? `${item.label} - ${permissionLabel}` : item.description}
@@ -229,11 +229,11 @@ export default function Sidebar({ userType, isCollapsed = false }: SidebarProps)
   };
 
   return (
-    <div className={`bg-slate-900 text-white transition-all duration-300 ${
+    <div className={`bg-gray-900 text-white transition-all duration-300 ${
       isCollapsed ? 'w-16' : 'w-64'
     } h-screen flex flex-col`}>
       {/* Logo - Fixed at top */}
-      <div className="p-4 border-b border-slate-700 flex-shrink-0">
+      <div className="p-4 border-b border-gray-800 flex-shrink-0">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-sm">LMS</span>
@@ -248,14 +248,14 @@ export default function Sidebar({ userType, isCollapsed = false }: SidebarProps)
       </div>
 
       {/* Menu Items - Scrollable area */}
-      <nav className="mt-4 px-2 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+      <nav className="mt-4 px-2 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
         {visibleMenuItems.map(item => renderMenuItem(item))}
       </nav>
 
       {/* User Info - Fixed at bottom */}
       {!isCollapsed && (
-        <div className="mt-auto p-4 flex-shrink-0 border-t border-slate-700">
-          <div className="bg-slate-800 rounded-lg p-3">
+        <div className="mt-auto p-4 flex-shrink-0 border-t border-gray-800">
+          <div className="bg-gray-800 rounded-lg p-3">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center">
                 <span className="text-xs font-medium">
@@ -266,7 +266,7 @@ export default function Sidebar({ userType, isCollapsed = false }: SidebarProps)
                 <p className="text-sm font-medium text-white truncate">
                   {user?.nama_lengkap || user?.username || 'User Name'}
                 </p>
-                <p className="text-xs text-slate-400 truncate">
+                <p className="text-xs text-gray-400 truncate">
                   {getUserTypeLabel(userType)}
                 </p>
               </div>

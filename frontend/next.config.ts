@@ -15,23 +15,20 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   
-  // Headers untuk mengatasi masalah CORS dan RSC
+  // Headers keamanan hanya di production agar dev HMR/chunks tidak terblokir
   async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-        ],
-      },
-    ];
+    if (process.env.NODE_ENV === 'production') {
+      return [
+        {
+          source: '/(.*)',
+          headers: [
+            { key: 'X-Frame-Options', value: 'DENY' },
+            { key: 'X-Content-Type-Options', value: 'nosniff' },
+          ],
+        },
+      ];
+    }
+    return [];
   },
 };
 

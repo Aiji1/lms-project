@@ -11,7 +11,8 @@ import {
   AlertCircle,
   Calendar,
   User,
-  FileText
+  FileText,
+  Target
 } from 'lucide-react';
 
 interface Siswa {
@@ -20,46 +21,48 @@ interface Siswa {
   nama_kelas: string;
 }
 
-interface TahunAjaran {
-  id_tahun_ajaran: number;
-  tahun_ajaran: string;
-  semester: string;
-  status: string;
+interface Guru {
+  nik_guru: string;
+  nama_guru: string;
+}
+
+interface TargetHalaqoh {
+  id_target_hafalan: number;
+  nis: string;
+  target_baris_perpertemuan: number; // 3,5,7
+  status: 'Aktif' | 'Non-aktif';
 }
 
 interface FormData {
   nis: string;
-  surah_mulai: string;
+  nama_surah: string;
   ayat_mulai: number;
-  surah_selesai: string;
   ayat_selesai: number;
-  total_baris: number;
-  tanggal_mulai: string;
-  tanggal_selesai: string;
-  status_hafalan: 'Proses' | 'Selesai' | 'Tertunda';
+  jumlah_baris: number;
+  tanggal_setoran: string;
+  status_hafalan: 'Lancar' | 'Kurang_Lancar' | 'Belum_Lancar';
+  nik_guru_penguji: string;
   catatan: string;
-  id_tahun_ajaran: number;
 }
 
 export default function TambahHafalanPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [siswa, setSiswa] = useState<Siswa[]>([]);
-  const [tahunAjaran, setTahunAjaran] = useState<TahunAjaran[]>([]);
+  const [guru, setGuru] = useState<Guru[]>([]);
+  const [targets, setTargets] = useState<Record<string, TargetHalaqoh | undefined>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   
   const [formData, setFormData] = useState<FormData>({
     nis: '',
-    surah_mulai: '',
+    nama_surah: '',
     ayat_mulai: 1,
-    surah_selesai: '',
     ayat_selesai: 1,
-    total_baris: 0,
-    tanggal_mulai: '',
-    tanggal_selesai: '',
-    status_hafalan: 'Proses',
+    jumlah_baris: 0,
+    tanggal_setoran: '',
+    status_hafalan: 'Lancar',
+    nik_guru_penguji: '',
     catatan: '',
-    id_tahun_ajaran: 0
   });
 
   useEffect(() => {
@@ -68,22 +71,34 @@ export default function TambahHafalanPage() {
 
   const fetchFormData = async () => {
     try {
-      const response = await api.get('/hafalan-form-data');
+      const response = await api.get('/v1/hafalan-form-data');
       if (response.data.success) {
         setSiswa(response.data.data.siswa || []);
-        setTahunAjaran(response.data.data.tahun_ajaran || []);
-        
-        // Set default tahun ajaran aktif
-        const activeTahunAjaran = response.data.data.tahun_ajaran?.find((ta: TahunAjaran) => ta.status === 'Aktif');
-        if (activeTahunAjaran) {
-          setFormData(prev => ({
-            ...prev,
-            id_tahun_ajaran: activeTahunAjaran.id_tahun_ajaran
-          }));
-        }
+        setGuru(response.data.data.guru || []);
       }
     } catch (error) {
       console.error('Error fetching form data:', error);
+    }
+
+    try {
+      const targetResponse = await api.get('/v1/target-hafalan-siswa', { params: { status: 'Aktif', per_page: 1000 }});
+      if (targetResponse.data.success) {
+        const list = targetResponse.data.data.data || [];
+        const map: Record<string, TargetHalaqoh> = {};
+        list.forEach((t: any) => {
+          if (t.status === 'Aktif') {
+            map[t.nis] = {
+              id_target_hafalan: t.id_target_hafalan,
+              nis: t.nis,
+              target_baris_perpertemuan: t.target_baris_perpertemuan,
+              status: t.status,
+            };
+          }
+        });
+        setTargets(map);
+      }
+    } catch (error) {
+      console.error('Error fetching target halaqoh:', error);
     }
   };
 
@@ -91,7 +106,7 @@ export default function TambahHafalanPage() {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'ayat_mulai' || name === 'ayat_selesai' || name === 'total_baris' || name === 'id_tahun_ajaran' 
+      [name]: name === 'ayat_mulai' || name === 'ayat_selesai' || name === 'jumlah_baris' 
         ? parseInt(value) || 0 
         : value
     }));
@@ -112,12 +127,8 @@ export default function TambahHafalanPage() {
       newErrors.nis = 'Siswa harus dipilih';
     }
 
-    if (!formData.surah_mulai) {
-      newErrors.surah_mulai = 'Surah mulai harus diisi';
-    }
-
-    if (!formData.surah_selesai) {
-      newErrors.surah_selesai = 'Surah selesai harus diisi';
+    if (!formData.nama_surah) {
+      newErrors.nama_surah = 'Nama surah harus diisi';
     }
 
     if (formData.ayat_mulai < 1) {
@@ -128,26 +139,16 @@ export default function TambahHafalanPage() {
       newErrors.ayat_selesai = 'Ayat selesai harus lebih dari 0';
     }
 
-    if (formData.total_baris < 1) {
-      newErrors.total_baris = 'Total baris harus lebih dari 0';
+    if (formData.jumlah_baris < 1) {
+      newErrors.jumlah_baris = 'Jumlah baris harus lebih dari 0';
     }
 
-    if (!formData.tanggal_mulai) {
-      newErrors.tanggal_mulai = 'Tanggal mulai harus diisi';
+    if (!formData.tanggal_setoran) {
+      newErrors.tanggal_setoran = 'Tanggal setoran harus diisi';
     }
 
-    if (!formData.tanggal_selesai) {
-      newErrors.tanggal_selesai = 'Tanggal selesai harus diisi';
-    }
-
-    if (formData.tanggal_mulai && formData.tanggal_selesai) {
-      if (new Date(formData.tanggal_mulai) > new Date(formData.tanggal_selesai)) {
-        newErrors.tanggal_selesai = 'Tanggal selesai harus setelah tanggal mulai';
-      }
-    }
-
-    if (!formData.id_tahun_ajaran) {
-      newErrors.id_tahun_ajaran = 'Tahun ajaran harus dipilih';
+    if (!formData.nik_guru_penguji) {
+      newErrors.nik_guru_penguji = 'Guru penguji harus dipilih';
     }
 
     setErrors(newErrors);
@@ -163,7 +164,7 @@ export default function TambahHafalanPage() {
 
     setLoading(true);
     try {
-      const response = await api.post('/hafalan', formData);
+      const response = await api.post('/v1/hafalan', formData);
       
       if (response.data.success) {
         router.push('/keagamaan/hafalan');
@@ -183,6 +184,7 @@ export default function TambahHafalanPage() {
   };
 
   const selectedSiswa = siswa.find(s => s.nis === formData.nis);
+  const targetHalaqoh = selectedSiswa ? targets[selectedSiswa.nis] : undefined;
 
   return (
     <div className="p-6">
@@ -244,201 +246,152 @@ export default function TambahHafalanPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="w-4 h-4 inline mr-1" />
-                Tahun Ajaran *
+                <User className="w-4 h-4 inline mr-1" />
+                Guru Penguji *
               </label>
               <select
-                name="id_tahun_ajaran"
-                value={formData.id_tahun_ajaran}
+                name="nik_guru_penguji"
+                value={formData.nik_guru_penguji}
                 onChange={handleInputChange}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.id_tahun_ajaran ? 'border-red-500' : 'border-gray-300'
+                  errors.nik_guru_penguji ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
-                <option value="">Pilih Tahun Ajaran</option>
-                {tahunAjaran.map((ta) => (
-                  <option key={ta.id_tahun_ajaran} value={ta.id_tahun_ajaran}>
-                    {ta.tahun_ajaran} - {ta.semester}
+                <option value="">Pilih Guru</option>
+                {guru.map((g) => (
+                  <option key={g.nik_guru} value={g.nik_guru}>
+                    {g.nama_guru} - {g.nik_guru}
                   </option>
                 ))}
               </select>
-              {errors.id_tahun_ajaran && (
+              {errors.nik_guru_penguji && (
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <AlertCircle className="w-4 h-4 mr-1" />
-                  {errors.id_tahun_ajaran}
+                  {errors.nik_guru_penguji}
                 </p>
               )}
             </div>
           </div>
 
-          {/* Hafalan Range */}
+          {/* Detail Hafalan */}
           <div className="border-t pt-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Range Hafalan</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Mulai */}
-              <div className="space-y-4">
-                <h4 className="font-medium text-gray-700">Mulai Dari:</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Surah *
-                    </label>
-                    <input
-                      type="text"
-                      name="surah_mulai"
-                      value={formData.surah_mulai}
-                      onChange={handleInputChange}
-                      placeholder="Contoh: Al-Fatihah"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.surah_mulai ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    />
-                    {errors.surah_mulai && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {errors.surah_mulai}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ayat *
-                    </label>
-                    <input
-                      type="number"
-                      name="ayat_mulai"
-                      value={formData.ayat_mulai}
-                      onChange={handleInputChange}
-                      min="1"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.ayat_mulai ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    />
-                    {errors.ayat_mulai && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {errors.ayat_mulai}
-                      </p>
-                    )}
-                  </div>
-                </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Detail Hafalan</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nama Surah *
+                </label>
+                <input
+                  type="text"
+                  name="nama_surah"
+                  value={formData.nama_surah}
+                  onChange={handleInputChange}
+                  placeholder="Contoh: Al-Baqarah"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.nama_surah ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {errors.nama_surah && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.nama_surah}
+                  </p>
+                )}
               </div>
-
-              {/* Selesai */}
-              <div className="space-y-4">
-                <h4 className="font-medium text-gray-700">Sampai:</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Surah *
-                    </label>
-                    <input
-                      type="text"
-                      name="surah_selesai"
-                      value={formData.surah_selesai}
-                      onChange={handleInputChange}
-                      placeholder="Contoh: Al-Baqarah"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.surah_selesai ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    />
-                    {errors.surah_selesai && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {errors.surah_selesai}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ayat *
-                    </label>
-                    <input
-                      type="number"
-                      name="ayat_selesai"
-                      value={formData.ayat_selesai}
-                      onChange={handleInputChange}
-                      min="1"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.ayat_selesai ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    />
-                    {errors.ayat_selesai && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {errors.ayat_selesai}
-                      </p>
-                    )}
-                  </div>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ayat Mulai *
+                </label>
+                <input
+                  type="number"
+                  name="ayat_mulai"
+                  value={formData.ayat_mulai}
+                  onChange={handleInputChange}
+                  min="1"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.ayat_mulai ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {errors.ayat_mulai && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.ayat_mulai}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ayat Selesai *
+                </label>
+                <input
+                  type="number"
+                  name="ayat_selesai"
+                  value={formData.ayat_selesai}
+                  onChange={handleInputChange}
+                  min="1"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.ayat_selesai ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {errors.ayat_selesai && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.ayat_selesai}
+                  </p>
+                )}
               </div>
             </div>
 
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Total Baris *
+                Jumlah Baris *
               </label>
               <input
                 type="number"
-                name="total_baris"
-                value={formData.total_baris}
+                name="jumlah_baris"
+                value={formData.jumlah_baris}
                 onChange={handleInputChange}
                 min="1"
                 className={`w-full md:w-1/3 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.total_baris ? 'border-red-500' : 'border-gray-300'
+                  errors.jumlah_baris ? 'border-red-500' : 'border-gray-300'
                 }`}
               />
-              {errors.total_baris && (
+              {errors.jumlah_baris && (
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <AlertCircle className="w-4 h-4 mr-1" />
-                  {errors.total_baris}
+                  {errors.jumlah_baris}
+                </p>
+              )}
+              {targetHalaqoh && (
+                <p className="mt-1 text-sm text-gray-600 flex items-center">
+                  <Target className="w-4 h-4 mr-1 text-blue-600" />
+                  Target halaqoh siswa: {targetHalaqoh.target_baris_perpertemuan} baris per pertemuan
                 </p>
               )}
             </div>
           </div>
 
-          {/* Periode dan Status */}
+          {/* Setoran & Status */}
           <div className="border-t pt-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Periode & Status</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Setoran & Status</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tanggal Mulai *
+                  Tanggal Setoran *
                 </label>
                 <input
                   type="date"
-                  name="tanggal_mulai"
-                  value={formData.tanggal_mulai}
+                  name="tanggal_setoran"
+                  value={formData.tanggal_setoran}
                   onChange={handleInputChange}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.tanggal_mulai ? 'border-red-500' : 'border-gray-300'
+                    errors.tanggal_setoran ? 'border-red-500' : 'border-gray-300'
                   }`}
                 />
-                {errors.tanggal_mulai && (
+                {errors.tanggal_setoran && (
                   <p className="mt-1 text-sm text-red-600 flex items-center">
                     <AlertCircle className="w-4 h-4 mr-1" />
-                    {errors.tanggal_mulai}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tanggal Selesai *
-                </label>
-                <input
-                  type="date"
-                  name="tanggal_selesai"
-                  value={formData.tanggal_selesai}
-                  onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.tanggal_selesai ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                />
-                {errors.tanggal_selesai && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <AlertCircle className="w-4 h-4 mr-1" />
-                    {errors.tanggal_selesai}
+                    {errors.tanggal_setoran}
                   </p>
                 )}
               </div>
@@ -453,9 +406,9 @@ export default function TambahHafalanPage() {
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="Proses">Proses</option>
-                  <option value="Selesai">Selesai</option>
-                  <option value="Tertunda">Tertunda</option>
+                  <option value="Lancar">Lancar</option>
+                  <option value="Kurang_Lancar">Kurang Lancar</option>
+                  <option value="Belum_Lancar">Belum Lancar</option>
                 </select>
               </div>
             </div>

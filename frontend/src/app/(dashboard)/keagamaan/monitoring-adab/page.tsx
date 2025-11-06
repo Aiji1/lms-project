@@ -1,9 +1,9 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { Users, UserCheck, Filter, Calendar, BookOpen, Eye, CheckCircle, XCircle, BarChart3, FileDown, PlusCircle, Trash2 } from "lucide-react";
+import { Users, UserCheck, Filter, Calendar, BookOpen, Eye, CheckCircle, XCircle, BarChart3, FileDown, PlusCircle, Trash2, Edit } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 interface MonitoringDetailItem {
@@ -57,16 +57,299 @@ export default function MonitoringAdabListPage() {
   const [recapLoading, setRecapLoading] = useState<boolean>(false);
   const [recapError, setRecapError] = useState<string | null>(null);
   const [kelasOptions, setKelasOptions] = useState<{ id_kelas: number; nama_kelas: string }[]>([]);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  // Toast notification
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    window.setTimeout(() => setToast(null), 3000);
+  };
   // Task management states (Teacher/Admin)
   const [taId, setTaId] = useState<number | null>(null);
   const [newTaskNama, setNewTaskNama] = useState<string>("");
   const [newTaskDeskripsi, setNewTaskDeskripsi] = useState<string>("");
   const [newTaskStatus, setNewTaskStatus] = useState<string>("Aktif");
+  // Export bulanan kuesioner (Admin/Guru)
+  const [showMonthlyExport, setShowMonthlyExport] = useState<boolean>(false);
+  const [exportMonth, setExportMonth] = useState<string>(""); // YYYY-MM
+  const [exportKelas, setExportKelas] = useState<string>("");
+  // Export 3 bulan (Admin/Guru)
+  const [showQuarterExport, setShowQuarterExport] = useState<boolean>(false);
+  const [quarterStartMonth, setQuarterStartMonth] = useState<string>(""); // YYYY-MM
+  const [quarterKelas, setQuarterKelas] = useState<string>("");
+
+  const openMonthlyExport = () => {
+    setShowMonthlyExport(true);
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    if (!exportMonth) setExportMonth(ym);
+    if (!exportKelas && kelasId) setExportKelas(kelasId);
+  };
+
+  const closeMonthlyExport = () => {
+    setShowMonthlyExport(false);
+  };
+
+  const handleDownloadMonthly = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!exportMonth) { alert('Silakan pilih bulan'); return; }
+    try {
+      const res = await api.get(`/v1/adab-questionnaire/export-monthly`, {
+        params: { month: exportMonth, kelas: exportKelas || undefined },
+        responseType: 'blob' as any,
+      });
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Rekapan_Adab_Siswa_${exportMonth}${exportKelas ? `_Kelas_${exportKelas}` : ''}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setShowMonthlyExport(false);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || 'Gagal mengunduh export bulanan');
+    }
+  };
+
+  const openQuarterExport = () => {
+    setShowQuarterExport(true);
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    if (!quarterStartMonth) setQuarterStartMonth(ym);
+    if (!quarterKelas && kelasId) setQuarterKelas(kelasId);
+  };
+
+  const closeQuarterExport = () => {
+    setShowQuarterExport(false);
+  };
+
+  const handleDownloadQuarterly = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (!quarterStartMonth) { alert('Silakan pilih bulan awal'); return; }
+      const res = await api.get(`/v1/adab-questionnaire/export-quarterly`, {
+        params: { month: quarterStartMonth, kelas: quarterKelas || undefined },
+        responseType: 'blob' as any,
+      });
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Rekapan_Adab_Siswa_${quarterStartMonth}_3_Bulan${quarterKelas ? `_Kelas_${quarterKelas}` : ''}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setShowQuarterExport(false);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || 'Gagal mengunduh export 3 bulan');
+    }
+  };
 
   // Student view states
   const [studentInfo, setStudentInfo] = useState<{ nis: string; nama: string; kelasId?: number; kelasNama?: string } | null>(null);
   const [studentStatusMap, setStudentStatusMap] = useState<Record<number, "Ya" | "Tidak" | undefined>>({});
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // Roster siswa per kelas untuk tampilan guru/admin
+  const [classStudents, setClassStudents] = useState<{ nis: string; nama: string }[]>([]);
+  const [rosterLoading, setRosterLoading] = useState<boolean>(false);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+  // Pemetaan status monitoring per NIS berdasarkan hasil monitoring-details saat ini
+  const statusByNis = useMemo(() => {
+    const map: Record<string, "Ya" | "Tidak" | undefined> = {};
+    details.forEach((d) => {
+      if (d.nis) {
+        map[d.nis] = (d.status_pelaksanaan as "Ya" | "Tidak" | null) || undefined;
+      }
+    });
+    return map;
+  }, [details]);
+
+  // Komponen kuesioner (CRUD + persist ke backend)
+  interface QuestionItem { id: number; text: string }
+  interface ComponentItem { id: number; title: string; questions: QuestionItem[] }
+  const [components, setComponents] = useState<ComponentItem[]>([]);
+  // Inline forms (to avoid window.prompt in Trae)
+  const [showAddComponentForm, setShowAddComponentForm] = useState<boolean>(false);
+  const [newComponentTitle, setNewComponentTitle] = useState<string>("");
+  const [pendingQuestionComponentId, setPendingQuestionComponentId] = useState<number | null>(null);
+  const [newQuestionText, setNewQuestionText] = useState<string>("");
+
+  const loadComponents = async () => {
+    try {
+      const res = await api.get(`/v1/adab-components`, { params: { include_questions: true } });
+      const data = res.data?.data || res.data; // handle resource or plain
+      const mapped: ComponentItem[] = (data || []).map((c: any) => ({
+        id: Number(c.id_component ?? c.id ?? c.id_component_id ?? c.idComponent ?? c.id),
+        title: String(c.nama_component ?? c.title ?? c.nama),
+        questions: (c.questions || c.pertanyaan || []).map((q: any) => ({
+          id: Number(q.id_question ?? q.id ?? q.id_question_id ?? q.idQuestion ?? q.id),
+          text: String(q.teks_pertanyaan ?? q.text ?? q.teks),
+        })),
+      }));
+      setComponents(mapped);
+    } catch (err) {
+      // ignore for now
+    }
+  };
+
+  useEffect(() => { loadComponents(); }, []);
+
+  // Defaultkan tanggal ke hari ini untuk Admin/Guru agar rekap tidak kosong
+  useEffect(() => {
+    if (isTeacherOrAdmin && !tanggal) {
+      setTanggal(todayStr);
+    }
+  }, [isTeacherOrAdmin, tanggal, todayStr]);
+
+  const addComponent = () => {
+    setShowAddComponentForm(true);
+    setNewComponentTitle("");
+  };
+
+  const submitNewComponent = async () => {
+    const title = newComponentTitle.trim();
+    if (!title) { alert('Nama komponen wajib diisi'); return; }
+    try {
+      const res = await api.post(`/v1/adab-components`, { nama_component: title, urutan: (components.length || 0) + 1, status: 'Aktif' });
+      const c = res.data?.data || res.data;
+      const newItem: ComponentItem = { id: Number(c.id_component ?? c.id), title: String(c.nama_component ?? title), questions: [] };
+      setComponents((prev) => [...prev, newItem]);
+      setShowAddComponentForm(false);
+      setNewComponentTitle("");
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || "Gagal menambah komponen");
+    }
+  };
+
+  const cancelNewComponent = () => {
+    setShowAddComponentForm(false);
+    setNewComponentTitle("");
+  };
+
+  const editComponentTitle = async (id: number) => {
+    const current = components.find((c) => c.id === id);
+    const title = window.prompt("Nama komponen", current?.title || "");
+    if (title == null) return;
+    try {
+      await api.put(`/v1/adab-components/${id}`, { nama_component: title });
+      setComponents((prev) => prev.map((c) => c.id === id ? { ...c, title } : c));
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || "Gagal mengedit komponen");
+    }
+  };
+
+  const viewComponent = (id: number) => {
+    const c = components.find((x) => x.id === id);
+    if (!c) return;
+    alert(`${c.title}\n\n${c.questions.map((q, i) => `${i+1}. ${q.text}`).join("\n")}`);
+  };
+
+  const deleteComponent = async (id: number) => {
+    if (!window.confirm("Yakin hapus komponen ini?")) return;
+    try {
+      await api.delete(`/v1/adab-components/${id}`);
+      setComponents((prev) => prev.filter((c) => c.id !== id));
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || "Gagal menghapus komponen");
+    }
+  };
+
+  const startAddQuestion = (id: number) => {
+    setPendingQuestionComponentId(id);
+    setNewQuestionText("");
+  };
+
+  const submitNewQuestion = async () => {
+    const id = pendingQuestionComponentId;
+    const text = newQuestionText.trim();
+    if (!id) return;
+    if (!text) { alert('Teks pertanyaan wajib diisi'); return; }
+    try {
+      const comp = components.find((c) => c.id === id);
+      const urutan = (comp?.questions.length || 0) + 1;
+      const res = await api.post(`/v1/adab-questions`, { id_component: id, teks_pertanyaan: text, urutan, status: 'Aktif' });
+      const q = res.data?.data || res.data;
+      const newQ: QuestionItem = { id: Number(q.id_question ?? q.id), text };
+      setComponents((prev) => prev.map((c) => c.id === id ? { ...c, questions: [...c.questions, newQ] } : c));
+      setPendingQuestionComponentId(null);
+      setNewQuestionText("");
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || "Gagal menambah pertanyaan");
+    }
+  };
+
+  const cancelNewQuestion = () => {
+    setPendingQuestionComponentId(null);
+    setNewQuestionText("");
+  };
+
+  const editQuestion = async (id: number, idx: number) => {
+    const c = components.find((x) => x.id === id);
+    const current = c?.questions[idx];
+    const text = window.prompt("Edit pertanyaan", current?.text || "");
+    if (text == null || !current) return;
+    try {
+      await api.put(`/v1/adab-questions/${current.id}`, { teks_pertanyaan: text });
+      setComponents((prev) => prev.map((c) => c.id === id ? { ...c, questions: c.questions.map((q, i) => i === idx ? { ...q, text } : q) } : c));
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || "Gagal mengedit pertanyaan");
+    }
+  };
+
+  const viewQuestion = (id: number, idx: number) => {
+    const c = components.find((x) => x.id === id);
+    const q = c?.questions[idx];
+    if (!q) return;
+    alert(q.text);
+  };
+
+  const deleteQuestion = async (id: number, idx: number) => {
+    const c = components.find((x) => x.id === id);
+    const q = c?.questions[idx];
+    if (!q) return;
+    if (!window.confirm("Yakin hapus pertanyaan ini?")) return;
+    try {
+      await api.delete(`/v1/adab-questions/${q.id}`);
+      setComponents((prev) => prev.map((c) => c.id === id ? { ...c, questions: c.questions.filter((_, i) => i !== idx) } : c));
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || "Gagal menghapus pertanyaan");
+    }
+  };
+
+  const [answers, setAnswers] = useState<Record<string, "Ya" | "Tidak" | undefined>>({});
+  const setAnswer = (catIndex: number, qIndex: number, value: "Ya" | "Tidak") => {
+    const key = `c${catIndex}-q${qIndex}`;
+    setAnswers((prev) => ({ ...prev, [key]: value }));
+  };
+  const totalYes = useMemo(() => Object.values(answers).filter((v) => v === "Ya").length, [answers]);
+  const totalQs = useMemo(() => components.reduce((acc, c) => acc + c.questions.length, 0), [components]);
+
+  const handleExportTemplate = () => {
+    const headers = ["Komponen", "Pertanyaan"];
+    const rows: string[][] = [];
+    components.forEach((c) => {
+      c.questions.forEach((q) => rows.push([c.title, q.text]));
+    });
+    const csv = [headers, ...rows]
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Template_Kuesioner_Adab_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const resetAnswers = () => {
+    setAnswers({});
+  };
 
   useEffect(() => {
     // Load some tugas adab options for quick navigation
@@ -84,10 +367,48 @@ export default function MonitoringAdabListPage() {
             deskripsi_tugas: d.deskripsi_tugas || "",
           }))
         );
+        if (!selectedTugas && data.length > 0) {
+          setSelectedTugas(String(data[0].id_tugas_adab));
+        }
       } catch {}
     };
     loadTugasOptions();
   }, []);
+
+  // Ambil roster siswa berdasarkan kelas terpilih (untuk tampilan guru/admin)
+  useEffect(() => {
+    const fetchRoster = async () => {
+      if (!kelasId) { setClassStudents([]); return; }
+      setRosterLoading(true);
+      setRosterError(null);
+      try {
+        const resp = await api.get(`/v1/tugas/siswa/${kelasId}`);
+        const siswaList = Array.isArray(resp.data?.data) ? resp.data.data : [];
+        const mapped = siswaList.map((s: any) => ({
+          nis: s.nis,
+          nama: s.nama_lengkap || s.nama_siswa || s.nama || "",
+        }));
+        setClassStudents(mapped);
+      } catch (err: any) {
+        // Fallback: ambil semua siswa lalu filter berdasarkan id_kelas
+        try {
+          const resp2 = await api.get('/v1/siswa', { params: { per_page: 1000 } });
+          const list = Array.isArray(resp2.data?.data?.data)
+            ? resp2.data.data.data
+            : (Array.isArray(resp2.data?.data) ? resp2.data.data : []);
+          const filtered = list
+            .filter((s: any) => String(s.id_kelas) === String(kelasId))
+            .map((s: any) => ({ nis: s.nis, nama: s.nama_lengkap || s.nama || '' }));
+          setClassStudents(filtered);
+        } catch (e2: any) {
+          setRosterError(err?.response?.data?.message || 'Gagal memuat daftar siswa');
+        }
+      } finally {
+        setRosterLoading(false);
+      }
+    };
+    fetchRoster();
+  }, [kelasId]);
 
   // Load form data (tahun ajaran) for task creation
   useEffect(() => {
@@ -173,7 +494,7 @@ export default function MonitoringAdabListPage() {
   const handleExportDaily = () => {
     // Export CSV dari data recap harian saat ini
     if (!selectedTugas || !tanggal) {
-      alert("Pilih tugas adab dan tanggal terlebih dahulu");
+      alert("Setel tanggal terlebih dahulu");
       return;
     }
     if (!dailyRecap || dailyRecap.length === 0) {
@@ -345,9 +666,13 @@ export default function MonitoringAdabListPage() {
           })
         )
       );
-      alert("Berhasil menyimpan monitoring hari ini.");
+      showToast('Berhasil menyimpan monitoring hari ini.', 'success');
+      // Set tanggal ke hari ini agar rekap langsung memuat
+      if (!tanggal) {
+        setTanggal(todayStr);
+      }
     } catch (e: any) {
-      alert(e?.response?.data?.message || e?.message || "Gagal menyimpan monitoring");
+      showToast(e?.response?.data?.message || e?.message || 'Gagal menyimpan monitoring', 'error');
     }
   };
 
@@ -371,21 +696,29 @@ export default function MonitoringAdabListPage() {
           <div className="mt-4 md:mt-0 flex items-center gap-2">
             {isTeacherOrAdmin && (
               <>
-                <Link
-                  href="/keagamaan/tugas-adab/tambah"
-                  className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  Tambah Tugas Adab
-                </Link>
                 <button
                   type="button"
-                  onClick={handleExportDaily}
-                  disabled={!selectedTugas || !tanggal || dailyRecap.length === 0}
-                  className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
+                  onClick={openMonthlyExport}
+                  className="flex items-center justify-center px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
                 >
                   <FileDown className="h-4 w-4 mr-2" />
-                  Export Rekap Harian
+                  Export Bulanan
+                </button>
+                <button
+                  type="button"
+                  onClick={openQuarterExport}
+                  className="flex items-center justify-center px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                >
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Export 3 Bulan
+                </button>
+                <button
+                  type="button"
+                  onClick={addComponent}
+                  className="flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  Tambah Komponen
                 </button>
               </>
             )}
@@ -404,65 +737,130 @@ export default function MonitoringAdabListPage() {
             )}
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold mb-4 text-gray-700">Checklist Adab Hari Ini</h3>
-            <div className="space-y-3">
-              {activeTugas.map((task) => {
-                const status = studentStatusMap[task.id_tugas_adab];
-                const isChecked = status === "Ya";
-                const isNo = status === "Tidak";
-                return (
-                  <div
-                    key={task.id_tugas_adab}
-                    className={`flex items-center justify-between p-4 rounded-lg transition-all ${
-                      isChecked
-                        ? "bg-green-50 border-2 border-green-500"
-                        : isNo
-                        ? "bg-red-50 border-2 border-red-500"
-                        : "bg-gray-50 border-2 border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <span className={`flex-1 ${isChecked ? "text-green-700 font-medium" : isNo ? "text-red-700 font-medium" : "text-gray-700"}`}>
-                      {task.nama_tugas}
-                    </span>
+          {/* Checklist Adab Hari Ini dihapus untuk menghindari kebingungan */}
+
+          {/* Kuesioner 12 Pertanyaan (3 komponen x 4 pertanyaan) - layout tiga kartu */}
+          <div className="bg-purple-100 rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-purple-900">Kuesioner Adab Harian</h3>
+              <div className="text-sm text-purple-800">Skor hari ini: <span className="font-semibold">{totalYes}</span> dari {totalQs}</div>
+            </div>
+            {isTeacherOrAdmin && showAddComponentForm && (
+              <div className="mb-4 bg-white rounded-lg p-4 shadow flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newComponentTitle}
+                  onChange={(e) => setNewComponentTitle(e.target.value)}
+                  placeholder="Nama komponen baru"
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2"
+                />
+                <button type="button" onClick={submitNewComponent} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Simpan</button>
+                <button type="button" onClick={cancelNewComponent} className="px-3 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {components.map((cat, ci) => (
+                <div key={cat.id} className="bg-white rounded-lg p-4 shadow">
+                  <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        aria-label="Tandai Ya"
-                        onClick={() => setStudentStatusMap((prev) => ({ ...prev, [task.id_tugas_adab]: "Ya" }))}
-                        className={`flex items-center justify-center h-8 w-8 rounded-full border-2 transition-colors ${
-                          isChecked
-                            ? "bg-green-600 border-green-600 text-white"
-                            : "border-green-600 text-green-600 hover:bg-green-50"
-                        }`}
-                      >
-                        <CheckCircle className="h-5 w-5" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Tandai Tidak"
-                        onClick={() => setStudentStatusMap((prev) => ({ ...prev, [task.id_tugas_adab]: "Tidak" }))}
-                        className={`flex items-center justify-center h-8 w-8 rounded-full border-2 transition-colors ${
-                          isNo
-                            ? "bg-red-600 border-red-600 text-white"
-                            : "border-red-600 text-red-600 hover:bg-red-50"
-                        }`}
-                      >
-                        <XCircle className="h-5 w-5" />
-                      </button>
+                      <BookOpen className="h-5 w-5 text-purple-700" />
+                      <h4 className="font-semibold text-purple-800">{cat.title}</h4>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isTeacherOrAdmin && (
+                        <>
+                          <button title="Tambah Pertanyaan" onClick={() => startAddQuestion(cat.id)} className="p-1 rounded hover:bg-purple-50 text-purple-700"><PlusCircle className="h-4 w-4" /></button>
+                          <button title="Lihat Komponen" onClick={() => viewComponent(cat.id)} className="p-1 rounded hover:bg-purple-50 text-purple-700"><Eye className="h-4 w-4" /></button>
+                          <button title="Edit Komponen" onClick={() => editComponentTitle(cat.id)} className="p-1 rounded hover:bg-purple-50 text-purple-700"><Edit className="h-4 w-4" /></button>
+                          <button title="Hapus Komponen" onClick={() => deleteComponent(cat.id)} className="p-1 rounded hover:bg-purple-50 text-red-600"><Trash2 className="h-4 w-4" /></button>
+                        </>
+                      )}
                     </div>
                   </div>
-                );
-              })}
+                  {isTeacherOrAdmin && pendingQuestionComponentId === cat.id && (
+                    <div className="mb-3 bg-gray-50 rounded-lg p-3 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newQuestionText}
+                        onChange={(e) => setNewQuestionText(e.target.value)}
+                        placeholder="Teks pertanyaan baru"
+                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2"
+                      />
+                      <button type="button" onClick={submitNewQuestion} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Simpan</button>
+                      <button type="button" onClick={cancelNewQuestion} className="px-3 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
+                    </div>
+                  )}
+                  <div className="border-t mb-3"></div>
+                  <div className="space-y-3">
+                    {cat.questions.map((q, qi) => {
+                      const key = `c${ci}-q${qi}`;
+                      const val = answers[key];
+                      return (
+                        <div key={qi} className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <p className="text-sm text-gray-800">{qi + 1}. {q.text}</p>
+                            <div className="flex items-center gap-2">
+                              {isTeacherOrAdmin && (
+                                <>
+                                  <button title="Lihat Pertanyaan" onClick={() => viewQuestion(cat.id, qi)} className="p-1 rounded hover:bg-gray-100 text-gray-700"><Eye className="h-4 w-4" /></button>
+                                  <button title="Edit Pertanyaan" onClick={() => editQuestion(cat.id, qi)} className="p-1 rounded hover:bg-gray-100 text-gray-700"><Edit className="h-4 w-4" /></button>
+                                  <button title="Hapus Pertanyaan" onClick={() => deleteQuestion(cat.id, qi)} className="p-1 rounded hover:bg-gray-100 text-red-600"><Trash2 className="h-4 w-4" /></button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-6 text-sm">
+                            <label className="inline-flex items-center gap-2"><input type="radio" name={key} value="Ya" checked={val === "Ya"} onChange={() => setAnswer(ci, qi, "Ya")} /> <span>Ya</span></label>
+                            <label className="inline-flex items-center gap-2"><input type="radio" name={key} value="Tidak" checked={val === "Tidak"} onChange={() => setAnswer(ci, qi, "Tidak")} /> <span>Tidak</span></label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="mt-4">
+            <div className="mt-6 grid grid-cols-1 gap-3">
+              {/* Hanya tampilkan tombol Simpan Data untuk user siswa */}
+              {isStudent && (
               <button
-                onClick={handleStudentSave}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                disabled={!studentInfo}
+                type="button"
+                onClick={async () => {
+                  try {
+                    if (!studentInfo) { showToast('Data siswa tidak tersedia', 'error'); return; }
+                    const entries: { id_question: number; jawaban: string }[] = [];
+                    components.forEach((c, ci) => {
+                      c.questions.forEach((q, qi) => {
+                        const key = `c${ci}-q${qi}`;
+                        const val = answers[key];
+                        if (val) entries.push({ id_question: q.id, jawaban: val });
+                      });
+                    });
+                    if (entries.length === 0) { showToast('Isi kuesioner terlebih dahulu', 'error'); return; }
+                    await api.post('/v1/adab-questionnaire-responses', {
+                      nis: studentInfo.nis,
+                      tanggal: todayStr,
+                      entries,
+                    });
+                    // Sinkronkan ke rekap harian tugas adab yang dipilih
+                    if (selectedTugas) {
+                      const statusForMonitoring = (entries.length > 0 && entries.some((e) => e.jawaban === 'Ya')) ? 'Ya' : 'Tidak';
+                      await api.post(`/v1/tugas-adab/${selectedTugas}/monitoring-submit`, {
+                        tanggal: todayStr,
+                        entries: [{ nis: studentInfo.nis, status_dilaksanakan: statusForMonitoring }],
+                      });
+                    }
+                    showToast('Kuesioner berhasil disimpan', 'success');
+                    if (!tanggal) setTanggal(todayStr);
+                  } catch (e: any) {
+                    showToast(e?.response?.data?.message || e?.message || 'Gagal menyimpan kuesioner', 'error');
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
-                Simpan Monitoring Hari Ini
+                Simpan Data
               </button>
+              )}
             </div>
           </div>
         </div>
@@ -472,66 +870,104 @@ export default function MonitoringAdabListPage() {
 
       {/* Kelola Tugas Adab dihapus untuk penyederhanaan tampilan guru */}
 
-      {/* Tugas Adab Aktif - hide for students */}
+      {/* Tugas Adab Aktif - tampilkan sebagai tiga kartu seperti gambar 2 */}
       {!isStudent && (
-      <div className="bg-white rounded-lg shadow-sm">
-        <div className="p-6 border-b">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-blue-600" />
-            Tugas Adab Aktif
-          </h2>
-          <p className="text-gray-600 text-sm mt-1">Daftar tugas adab yang aktif. Klik tugas untuk melihat monitoring.</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Tugas</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deskripsi</th>
-                {isTeacherOrAdmin && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {activeTugas.length === 0 ? (
-                <tr>
-                  <td colSpan={isTeacherOrAdmin ? 4 : 3} className="px-6 py-8 text-center text-gray-500">Tidak ada tugas aktif</td>
-                </tr>
-              ) : (
-                activeTugas.map((t, idx) => (
-                  <tr key={t.id_tugas_adab} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedTugas(String(t.id_tugas_adab))}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{idx + 1}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 flex items-center gap-2">
-                      <BookOpen className="h-4 w-4 text-blue-600" />
-                      {t.nama_tugas}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{t.deskripsi_tugas}</td>
+        <div className="bg-purple-100 rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-purple-900 flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-purple-700" />
+              Tugas Adab Aktif (Preview Kuesioner)
+            </h2>
+            <div className="text-sm text-purple-800">Skor contoh: <span className="font-semibold">{totalYes}</span> dari {totalQs}</div>
+          </div>
+          {isTeacherOrAdmin && showAddComponentForm && (
+            <div className="mb-4 bg-white rounded-lg p-4 shadow flex items-center gap-2">
+              <input
+                type="text"
+                value={newComponentTitle}
+                onChange={(e) => setNewComponentTitle(e.target.value)}
+                placeholder="Nama komponen baru"
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2"
+              />
+              <button type="button" onClick={submitNewComponent} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Simpan</button>
+              <button type="button" onClick={cancelNewComponent} className="px-3 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {components.map((cat, ci) => (
+              <div key={cat.id} className="bg-white rounded-lg p-4 shadow">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-5 w-5 text-purple-700" />
+                    <h3 className="font-semibold text-purple-800">{cat.title}</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
                     {isTeacherOrAdmin && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteTask(t.id_tugas_adab); }}
-                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-                        >
-                          <Trash2 className="h-4 w-4 inline mr-1" /> Hapus
-                        </button>
-                      </td>
+                      <>
+                        <button title="Tambah Pertanyaan" onClick={() => startAddQuestion(cat.id)} className="p-1 rounded hover:bg-purple-50 text-purple-700"><PlusCircle className="h-4 w-4" /></button>
+                        <button title="Lihat Komponen" onClick={() => viewComponent(cat.id)} className="p-1 rounded hover:bg-purple-50 text-purple-700"><Eye className="h-4 w-4" /></button>
+                        <button title="Edit Komponen" onClick={() => editComponentTitle(cat.id)} className="p-1 rounded hover:bg-purple-50 text-purple-700"><Edit className="h-4 w-4" /></button>
+                        <button title="Hapus Komponen" onClick={() => deleteComponent(cat.id)} className="p-1 rounded hover:bg-purple-50 text-red-600"><Trash2 className="h-4 w-4" /></button>
+                      </>
                     )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+                {isTeacherOrAdmin && pendingQuestionComponentId === cat.id && (
+                  <div className="mb-3 bg-gray-50 rounded-lg p-3 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newQuestionText}
+                      onChange={(e) => setNewQuestionText(e.target.value)}
+                      placeholder="Teks pertanyaan baru"
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2"
+                    />
+                    <button type="button" onClick={submitNewQuestion} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Simpan</button>
+                    <button type="button" onClick={cancelNewQuestion} className="px-3 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
+                  </div>
+                )}
+                <div className="border-t mb-3"></div>
+                <div className="space-y-3">
+                  {cat.questions.map((q, i) => {
+                    const key = `c${ci}-q${i}`;
+                    const val = answers[key];
+                    return (
+                      <div key={i} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <p className="text-sm text-gray-800">{i + 1}. {q.text}</p>
+                          <div className="flex items-center gap-2">
+                            {isTeacherOrAdmin && (
+                              <>
+                                <button title="Lihat Pertanyaan" onClick={() => viewQuestion(cat.id, i)} className="p-1 rounded hover:bg-gray-100 text-gray-700"><Eye className="h-4 w-4" /></button>
+                                <button title="Edit Pertanyaan" onClick={() => editQuestion(cat.id, i)} className="p-1 rounded hover:bg-gray-100 text-gray-700"><Edit className="h-4 w-4" /></button>
+                                <button title="Hapus Pertanyaan" onClick={() => deleteQuestion(cat.id, i)} className="p-1 rounded hover:bg-gray-100 text-red-600"><Trash2 className="h-4 w-4" /></button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6 text-sm">
+                          <label className="inline-flex items-center gap-2"><input type="radio" name={key} value="Ya" checked={val === 'Ya'} onChange={() => setAnswer(ci, i, 'Ya')} /> <span>Ya</span></label>
+                          <label className="inline-flex items-center gap-2"><input type="radio" name={key} value="Tidak" checked={val === 'Tidak'} onChange={() => setAnswer(ci, i, 'Tidak')} /> <span>Tidak</span></label>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Untuk preview guru/admin: hilangkan tombol Simpan Data dan biarkan utilitas lain bila diperlukan */}
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <a href="#rekap-harian" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-center">Lihat Statistik</a>
+            <button type="button" onClick={handleExportTemplate} className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600">Export ke Excel</button>
+            <button type="button" onClick={resetAnswers} className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700">Reset Form</button>
+          </div>
         </div>
-      </div>
       )}
 
       {/* Rekap Harian per Kelas - teacher/admin only */}
       {isTeacherOrAdmin && (
       <div className="bg-white rounded-lg shadow-sm">
-        <div className="p-6 border-b">
+        <div className="p-6 border-b" id="rekap-harian">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-blue-600" />
             Rekap Harian per Kelas
@@ -541,35 +977,27 @@ export default function MonitoringAdabListPage() {
         {/* Filter Controls */}
         <div className="p-6 border-b">
           <form onSubmit={handleApplyFilters} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tugas Adab</label>
-                <div className="relative">
-                  <select
-                    value={selectedTugas}
-                    onChange={(e) => setSelectedTugas(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  >
-                    <option value="">Pilih Tugas Adab</option>
-                    {tugasOptions.map((opt) => (
-                      <option key={opt.id_tugas_adab} value={String(opt.id_tugas_adab)}>
-                        {opt.nama_tugas}
-                      </option>
-                    ))}
-                  </select>
-                  <BookOpen className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
-                </div>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal</label>
-                <div className="relative">
+                <div className="relative" onClick={() => {
+                  const el = dateInputRef.current;
+                  if (!el) return;
+                  // @ts-ignore
+                  if (typeof el.showPicker === 'function') {
+                    // @ts-ignore
+                    el.showPicker();
+                  } else {
+                    el.focus();
+                  }
+                }}>
                   <input
                     type="date"
                     value={tanggal}
                     onChange={(e) => setTanggal(e.target.value)}
+                    ref={dateInputRef}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   />
-                  <Calendar className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
                 </div>
               </div>
               <div>
@@ -651,14 +1079,14 @@ export default function MonitoringAdabListPage() {
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-red-600">{recapError}</td>
                 </tr>
-              ) : !selectedTugas || !tanggal ? (
+              ) : !tanggal ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">Pilih tugas dan tanggal untuk melihat rekap harian</td>
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">Setel tanggal untuk melihat rekap harian</td>
                 </tr>
               ) : dailyRecap.length > 0 ? (
                 dailyRecap.map((item) => (
                   <tr key={`${item.id_kelas}-${item.tanggal}`} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.nama_kelas}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.nama_kelas || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.total_siswa}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.siswa_melaksanakan}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.siswa_tidak_melaksanakan}</td>
@@ -673,12 +1101,149 @@ export default function MonitoringAdabListPage() {
             </tbody>
           </table>
         </div>
+        {/* Daftar nama siswa pada kelas terpilih */}
+        {tanggal && kelasId && (
+          <div className="p-6">
+            <h3 className="text-md font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Users className="h-5 w-5 text-gray-700" />
+              Daftar Siswa – Kelas Terpilih
+            </h3>
+            {rosterLoading ? (
+              <p className="text-gray-500">Memuat daftar siswa...</p>
+            ) : rosterError ? (
+              <p className="text-red-600">{rosterError}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Siswa</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NIS</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {classStudents && classStudents.length > 0 ? (
+                      classStudents.map((s, idx) => {
+                        const status = statusByNis[s.nis];
+                        return (
+                          <tr key={s.nis} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{idx + 1}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{s.nama}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{s.nis}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              {status === 'Ya' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-green-800 bg-green-100 text-xs">Ya</span>
+                              )}
+                              {status === 'Tidak' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-orange-800 bg-orange-100 text-xs">Tidak</span>
+                              )}
+                              {!status && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-red-800 bg-red-100 text-xs">Belum</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center text-gray-500">Tidak ada data siswa untuk filter ini</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       )}
 
-      {/* Ekspor Bulanan dihapus (disederhanakan) */}
+      {/* Modal Export Bulanan */}
+      {showMonthlyExport && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold mb-4">Export Bulanan</h3>
+            <form onSubmit={handleDownloadMonthly} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bulan</label>
+                <input
+                  type="month"
+                  value={exportMonth}
+                  onChange={(e) => setExportMonth(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Kelas (opsional)</label>
+                <select
+                  value={exportKelas}
+                  onChange={(e) => setExportKelas(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                >
+                  <option value="">Semua Kelas</option>
+                  {kelasOptions.map((k) => (
+                    <option key={k.id_kelas} value={String(k.id_kelas)}>{k.nama_kelas}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={closeMonthlyExport} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
+                <button type="submit" className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700">Unduh Excel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Export 3 Bulan */}
+      {showQuarterExport && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold mb-4">Export 3 Bulan</h3>
+            <form onSubmit={handleDownloadQuarterly} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bulan Awal</label>
+                <input
+                  type="month"
+                  value={quarterStartMonth}
+                  onChange={(e) => setQuarterStartMonth(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+                <p className="text-xs text-gray-500 mt-1">Akan menggabungkan data 3 bulan berturut-turut.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Kelas (opsional)</label>
+                <select
+                  value={quarterKelas}
+                  onChange={(e) => setQuarterKelas(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                >
+                  <option value="">Semua Kelas</option>
+                  {kelasOptions.map((k) => (
+                    <option key={k.id_kelas} value={String(k.id_kelas)}>{k.nama_kelas}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={closeQuarterExport} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
+                <button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Unduh Excel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Tabel detail monitoring dihapus untuk penyederhanaan tampilan guru */}
+      {/* Toast notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

@@ -25,6 +25,16 @@ type DetailItem = {
   tanggal_monitoring: string | null;
 };
 
+type RowItem = {
+  nis: string;
+  nama_siswa: string;
+  kelas: string;
+  status_dhuhur: string | null;
+  tanggal_dhuhur: string | null;
+  status_asar: string | null;
+  tanggal_asar: string | null;
+};
+
 export default function MonitoringSholatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -50,22 +60,10 @@ export default function MonitoringSholatPage() {
     const fetchFormData = async () => {
       try {
         setError(null);
-        // gunakan endpoint kelas-form-data untuk mengambil list kelas
-        const resp = await api.get("/v1/kelas-form-data");
-        const raw = resp.data?.data;
-        let options: any[] = [];
-        // handle jika API mengembalikan array langsung
-        if (Array.isArray(raw)) {
-          options = raw;
-        } else if (raw && Array.isArray(raw.kelasOptions)) {
-          options = raw.kelasOptions;
-        } else if (raw && Array.isArray(raw.kelas_options)) {
-          options = raw.kelas_options;
-        } else if (raw && Array.isArray(raw.kelas)) {
-          options = raw.kelas;
-        }
-        // pastikan terakhir tetap array
-        setKelasOptions(Array.isArray(options) ? options : []);
+        // Ambil daftar kelas dari resource utama agar pasti berisi id_kelas & nama_kelas
+        const resp = await api.get("/v1/kelas", { params: { per_page: 1000 } });
+        const items = resp.data?.data || [];
+        setKelasOptions(Array.isArray(items) ? items : []);
       } catch (err: any) {
         setError(err?.response?.data?.message || "Gagal memuat data kelas");
       }
@@ -79,7 +77,7 @@ export default function MonitoringSholatPage() {
       setError(null);
 
       const params: any = {};
-      if (selectedKelas) params.kelas = selectedKelas;
+      if (selectedKelas) params.kelas = Number(selectedKelas);
       if (tanggal) params.tanggal = tanggal;
       if (jenisSholat) params.jenis_sholat = jenisSholat;
 
@@ -122,6 +120,34 @@ export default function MonitoringSholatPage() {
     router.push(`/keagamaan/monitoring-sholat/input?${params.toString()}`);
   };
 
+  const handleExportMonthly = async () => {
+    try {
+      const month = (tanggal || new Date().toISOString().slice(0, 10)).slice(0, 7); // YYYY-MM
+      const params: any = { month };
+      if (selectedKelas) params.kelas = Number(selectedKelas);
+
+      const resp = await api.get("/v1/monitoring-sholat/export-monthly", {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([resp.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const kelasSuffix = selectedKelas ? `_kelas-${Number(selectedKelas)}` : "";
+      a.href = url;
+      a.download = `Monitoring-Sholat_${month}${kelasSuffix}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Gagal mengunduh export monitoring sholat");
+    }
+  };
+
   const toggleKehadiran = (nis: string) => {
     setDetails((prev) =>
       prev.map((p) => {
@@ -135,17 +161,28 @@ export default function MonitoringSholatPage() {
   const submitInline = async () => {
     try {
       setSubmittingInline(true);
-      const entries = details
+      const entriesDh = detailsDhuhur
+        .filter((d) => d.status_kehadiran === "Hadir" || d.status_kehadiran === "Tidak_Hadir")
+        .map((d) => ({ nis: d.nis, status_kehadiran: d.status_kehadiran }));
+      const entriesAs = detailsAsar
         .filter((d) => d.status_kehadiran === "Hadir" || d.status_kehadiran === "Tidak_Hadir")
         .map((d) => ({ nis: d.nis, status_kehadiran: d.status_kehadiran }));
 
-      const payload = {
-        tanggal: tanggal,
-        jenis_sholat: jenisSholat,
-        entries,
-      };
-      const resp = await api.post("/v1/monitoring-sholat/submit", payload);
-      alert(resp.data?.message || "Berhasil menyimpan monitoring sholat");
+      if (entriesDh.length > 0) {
+        await api.post("/v1/monitoring-sholat/submit", {
+          tanggal,
+          jenis_sholat: "Dhuhur",
+          entries: entriesDh,
+        });
+      }
+      if (entriesAs.length > 0) {
+        await api.post("/v1/monitoring-sholat/submit", {
+          tanggal,
+          jenis_sholat: "Asar",
+          entries: entriesAs,
+        });
+      }
+      alert("Berhasil menyimpan monitoring sholat");
       await refreshData();
     } catch (err: any) {
       alert(err?.response?.data?.message || "Gagal menyimpan monitoring sholat");
@@ -174,15 +211,95 @@ export default function MonitoringSholatPage() {
   const recapDhuhurCards = useMemo(() => buildRecap(detailsDhuhur), [detailsDhuhur]);
   const recapAsarCards = useMemo(() => buildRecap(detailsAsar), [detailsAsar]);
 
+  // Helper untuk membuat key pengurutan kelas: X < XI < XII, lalu huruf, lalu nomor
+  const kelasSortKey = (kelas: string | null | undefined): number => {
+    if (!kelas) return Number.MAX_SAFE_INTEGER;
+    const raw = (kelas || "").trim().toUpperCase().replace(/\s+/g, " ");
+    const romanMap: Record<string, number> = { X: 10, XI: 11, XII: 12 };
+    const tryMatch = (pattern: RegExp) => {
+      const m = raw.match(pattern);
+      if (!m) return null;
+      const roman = m[1];
+      const letter = m[2];
+      const numStr = m[3];
+      const grade = romanMap[roman] ?? 999;
+      const letterIdx = (letter.charCodeAt(0) - 64) || 0; // A=1
+      const section = parseInt(numStr, 10) || 0;
+      return grade * 1000 + letterIdx * 100 + section;
+    };
+    // Coba dengan spasi: "X E1" atau "X E 1"
+    const withSpaces = tryMatch(/^(X|XI|XII)\s*([A-Z])\s*(\d+)$/);
+    if (withSpaces !== null) return withSpaces;
+    // Coba tanpa spasi: "XE1"
+    const noSpaces = tryMatch(/^(X|XI|XII)([A-Z])(\d+)$/);
+    if (noSpaces !== null) return noSpaces;
+    // Fallback ke pengurutan alfabet
+    return Number.MAX_SAFE_INTEGER;
+  };
+
+  // Gabungkan Dhuhur & Asar menjadi satu baris per siswa
+  const rows: RowItem[] = useMemo(() => {
+    const map = new Map<string, RowItem>();
+    const collect = (list: DetailItem[], jenis: "Dhuhur" | "Asar") => {
+      list.forEach((d) => {
+        const cur = map.get(d.nis) || {
+          nis: d.nis,
+          nama_siswa: d.nama_siswa,
+          kelas: d.kelas,
+          status_dhuhur: null,
+          tanggal_dhuhur: null,
+          status_asar: null,
+          tanggal_asar: null,
+        };
+        if (jenis === "Dhuhur") {
+          cur.status_dhuhur = d.status_kehadiran || null;
+          cur.tanggal_dhuhur = d.tanggal_monitoring;
+        } else {
+          cur.status_asar = d.status_kehadiran || null;
+          cur.tanggal_asar = d.tanggal_monitoring;
+        }
+        map.set(d.nis, cur);
+      });
+    };
+    collect(detailsDhuhur, "Dhuhur");
+    collect(detailsAsar, "Asar");
+    return Array.from(map.values()).sort((a, b) => {
+      const ka = kelasSortKey(a.kelas);
+      const kb = kelasSortKey(b.kelas);
+      if (ka !== kb) return ka - kb;
+      return a.nama_siswa.localeCompare(b.nama_siswa);
+    });
+  }, [detailsDhuhur, detailsAsar]);
+
+  const toggleDhuhur = (nis: string) => {
+    setDetailsDhuhur((prev) =>
+      prev.map((p) => {
+        if (p.nis !== nis) return p;
+        const next = p.status_kehadiran === "Hadir" ? "Tidak_Hadir" : "Hadir";
+        return { ...p, status_kehadiran: next };
+      })
+    );
+  };
+
+  const toggleAsar = (nis: string) => {
+    setDetailsAsar((prev) =>
+      prev.map((p) => {
+        if (p.nis !== nis) return p;
+        const next = p.status_kehadiran === "Hadir" ? "Tidak_Hadir" : "Hadir";
+        return { ...p, status_kehadiran: next };
+      })
+    );
+  };
+
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Monitoring Sholat</h1>
         <button
-          onClick={goToInput}
-          className="px-4 py-2 bg-blue-600 text-white rounded"
+          onClick={handleExportMonthly}
+          className="px-3 py-2 bg-green-600 text-white rounded"
         >
-          Input Monitoring
+          Export Bulanan (Excel)
         </button>
       </div>
 
@@ -191,12 +308,12 @@ export default function MonitoringSholatPage() {
           <label className="block text-sm font-medium mb-1">Kelas</label>
           <select
             className="w-full border rounded px-2 py-1"
-            value={selectedKelas || ""}
+            value={selectedKelas ?? ""}
             onChange={(e) => setSelectedKelas(e.target.value || null)}
           >
             <option value="">Semua Kelas</option>
             {kelasOptions.map((k) => (
-              <option key={k.id_kelas} value={k.id_kelas}>
+              <option key={String((k as any).id_kelas ?? (k as any).id)} value={String((k as any).id_kelas ?? (k as any).id)}>
                 {k.nama_kelas}
               </option>
             ))}
@@ -339,30 +456,39 @@ export default function MonitoringSholatPage() {
                 <th className="p-2">NIS</th>
                 <th className="p-2">Nama</th>
                 <th className="p-2">Kelas</th>
-                <th className="p-2">Status</th>
-                <th className="p-2">Tanggal</th>
+                <th className="p-2">Dzuhur</th>
+                <th className="p-2">Asar</th>
               </tr>
             </thead>
             <tbody>
-              {details.map((d) => (
-                <tr key={d.nis} className="border-t">
-                  <td className="p-2">{d.nis}</td>
-                  <td className="p-2">{d.nama_siswa}</td>
-                  <td className="p-2">{d.kelas}</td>
+              {rows.map((r) => (
+                <tr key={r.nis} className="border-t">
+                  <td className="p-2">{r.nis}</td>
+                  <td className="p-2">{r.nama_siswa}</td>
+                  <td className="p-2">{r.kelas}</td>
                   <td className="p-2">
                     <label className="inline-flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={d.status_kehadiran === "Hadir"}
-                        onChange={() => toggleKehadiran(d.nis)}
+                        checked={r.status_dhuhur === "Hadir"}
+                        onChange={() => toggleDhuhur(r.nis)}
                       />
-                      <span>{d.status_kehadiran || "Belum Dimonitor"}</span>
+                      <span>{r.status_dhuhur || "Belum Dimonitor"}</span>
                     </label>
                   </td>
-                  <td className="p-2">{d.tanggal_monitoring || "-"}</td>
+                  <td className="p-2">
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={r.status_asar === "Hadir"}
+                        onChange={() => toggleAsar(r.nis)}
+                      />
+                      <span>{r.status_asar || "Belum Dimonitor"}</span>
+                    </label>
+                  </td>
                 </tr>
               ))}
-              {details.length === 0 && (
+              {rows.length === 0 && (
                 <tr>
                   <td className="p-2" colSpan={5}>
                     Tidak ada data.

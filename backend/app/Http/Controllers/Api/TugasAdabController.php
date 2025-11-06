@@ -661,17 +661,17 @@ class TugasAdabController extends Controller
                 ], 422);
             }
 
-            // Total siswa aktif per kelas
-            $totalByClass = DB::table('siswa')
-                ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')
-                ->where('siswa.status', 'Aktif')
+            // Total siswa aktif per kelas (sertakan kelas tanpa siswa agar rekap tidak hilang),
+            // hitung hanya siswa berstatus Aktif
+            $totalByClass = DB::table('kelas')
+                ->leftJoin('siswa', 'kelas.id_kelas', '=', 'siswa.id_kelas')
                 ->when(!empty($kelasFilter), function ($q) use ($kelasFilter) {
-                    return $q->where('siswa.id_kelas', $kelasFilter);
+                    return $q->where('kelas.id_kelas', $kelasFilter);
                 })
                 ->select([
                     'kelas.id_kelas',
                     'kelas.nama_kelas',
-                    DB::raw('COUNT(siswa.nis) as total_siswa')
+                    DB::raw("SUM(CASE WHEN siswa.status = 'Aktif' THEN 1 ELSE 0 END) as total_siswa")
                 ])
                 ->groupBy('kelas.id_kelas', 'kelas.nama_kelas')
                 ->get()

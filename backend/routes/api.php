@@ -28,6 +28,9 @@ use App\Http\Controllers\Api\JenisPembayaranController;
 use App\Http\Controllers\Api\TagihanController;
 use App\Http\Controllers\Api\PembayaranController;
 use App\Http\Controllers\Api\LaporanController;
+use App\Http\Controllers\Api\AdabComponentController;
+use App\Http\Controllers\Api\AdabQuestionController;
+use App\Http\Controllers\Api\AdabQuestionnaireResponseController;
 
 Route::middleware('custom.auth')->get('/user', function (Request $request) {
     return $request->user();
@@ -169,9 +172,17 @@ Route::prefix('v1')->group(function () {
         Route::get('/monitoring-sholat/stats', [\App\Http\Controllers\Api\MonitoringSholatController::class, 'getMonitoringStats']);
         Route::get('/monitoring-sholat/details', [\App\Http\Controllers\Api\MonitoringSholatController::class, 'getMonitoringDetails']);
         Route::post('/monitoring-sholat/submit', [\App\Http\Controllers\Api\MonitoringSholatController::class, 'submitMonitoring']);
+        Route::get('/monitoring-sholat/export-monthly', [\App\Http\Controllers\Api\MonitoringSholatController::class, 'exportMonthly']);
         
         // Tugas Adab API Resource
         Route::apiResource('tugas-adab', TugasAdabController::class);
+
+        // Adab Components & Questions API Resource
+        Route::apiResource('adab-components', AdabComponentController::class);
+        Route::apiResource('adab-questions', AdabQuestionController::class);
+        Route::post('adab-questionnaire-responses', [AdabQuestionnaireResponseController::class, 'store']);
+        Route::get('adab-questionnaire/export-monthly', [AdabQuestionnaireResponseController::class, 'exportMonthly']);
+        Route::get('adab-questionnaire/export-quarterly', [AdabQuestionnaireResponseController::class, 'exportQuarterly']);
 
         // MODUL AJAR ROUTES
         Route::get('/modul-ajar/stats', [\App\Http\Controllers\Api\ModulAjarController::class, 'stats']);
@@ -215,6 +226,8 @@ Route::prefix('v1')->group(function () {
         // EVALUASI HAFALAN ROUTES
         // Form data route HARUS di atas apiResource
         Route::get('/evaluasi-hafalan-form-data', [EvaluasiHafalanController::class, 'getFormData']);
+        // Statistik evaluasi hafalan
+        Route::get('/evaluasi-hafalan/statistik', [EvaluasiHafalanController::class, 'getStatistik']);
         
         // Evaluasi Hafalan API Resource
         Route::apiResource('evaluasi-hafalan', EvaluasiHafalanController::class);

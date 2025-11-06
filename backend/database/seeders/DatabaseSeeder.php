@@ -59,5 +59,8 @@ class DatabaseSeeder extends Seeder
                 'updated_date' => now(),
             ]
         );
+
+        // Seed default komponen & pertanyaan kuesioner adab
+        $this->call(AdabQuestionnaireSeeder::class);
     }
 }
