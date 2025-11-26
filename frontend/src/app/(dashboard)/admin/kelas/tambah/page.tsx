@@ -53,7 +53,7 @@ export default function TambahKelasPage() {
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/kelas-form-data');
+      const response = await api.get('/kelas-form-data');
       if (response.data.success) {
         setFormOptions(response.data.data);
         
@@ -101,7 +101,7 @@ export default function TambahKelasPage() {
         kapasitas_maksimal: parseInt(formData.kapasitas_maksimal)
       };
 
-      const response = await api.post('/v1/kelas', submitData);
+      const response = await api.post('/kelas', submitData);
       
       if (response.data.success) {
         alert('Kelas berhasil ditambahkan!');

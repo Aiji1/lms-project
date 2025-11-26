@@ -43,7 +43,7 @@ export default function TambahTahunAjaranPage() {
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/tahun-ajaran-form-data');
+      const response = await api.get('/tahun-ajaran-form-data');
       if (response.data.success) {
         setFormOptions(response.data.data);
       }
@@ -74,7 +74,7 @@ export default function TambahTahunAjaranPage() {
     setFormErrors({});
 
     try {
-      const response = await api.post('/v1/tahun-ajaran', formData);
+      const response = await api.post('/tahun-ajaran', formData);
       
       if (response.data.success) {
         alert('Tahun ajaran berhasil ditambahkan!');

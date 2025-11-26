@@ -216,7 +216,7 @@ export default function TugasPage() {
     try {
       setLoading(true);
       const mp = searchParams.get('mata_pelajaran');
-      const response = await api.get('/v1/tugas', {
+      const response = await api.get('/tugas', {
         params: {
           mata_pelajaran: mp || undefined,
           id_tahun_ajaran: tahunAjaranFilter || undefined,
@@ -239,7 +239,7 @@ export default function TugasPage() {
 
   const fetchFormData = async () => {
     try {
-      const response = await api.get('/v1/tugas-form-data');
+      const response = await api.get('/tugas-form-data');
       setKelasOptions(response.data.data.kelas || []);
     } catch (error) {
       console.error('Error fetching form data:', error);
@@ -248,7 +248,7 @@ export default function TugasPage() {
 
   const fetchTahunAjaran = async () => {
     try {
-      const response = await api.get('/v1/tahun-ajaran');
+      const response = await api.get('/tahun-ajaran');
       if (response.data.success) {
         const list: TahunAjaran[] = response.data.data || [];
         setTahunAjaranOptions(list);

@@ -105,8 +105,8 @@ export default function NilaiSiswaPage() {
   const fetchData = async () => {
     try {
       const [nilaiResponse, filterResponse] = await Promise.all([
-        api.get('/v1/nilai'),
-        api.get('/v1/nilai-siswa/filter-options')
+        api.get('/nilai'),
+        api.get('/nilai-siswa/filter-options')
       ]);
 
       if (nilaiResponse.data.success) {

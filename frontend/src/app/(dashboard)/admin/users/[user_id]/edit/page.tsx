@@ -112,7 +112,7 @@ export default function EditUserPage() {
   useEffect(() => {
     const fetchFormData = async () => {
       try {
-        const response = await api.get('/v1/users-form-data');
+        const response = await api.get('/users-form-data');
         if (response.data.success) {
           setFormOptions(response.data.data);
         }

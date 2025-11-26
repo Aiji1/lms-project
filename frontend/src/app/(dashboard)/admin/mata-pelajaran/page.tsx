@@ -48,7 +48,7 @@ export default function MataPelajaranPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/v1/mata-pelajaran', {
+      const response = await api.get('/mata-pelajaran', {
         params: {
           page: currentPage,
           per_page: 10,
@@ -95,7 +95,7 @@ export default function MataPelajaranPage() {
   const handleDownloadTemplate = async () => {
     try {
       console.log('Starting template download...');
-      const response = await api.get('/v1/mata-pelajaran/template', {
+      const response = await api.get('/mata-pelajaran/template', {
         responseType: 'blob'
       });
       
@@ -131,7 +131,7 @@ export default function MataPelajaranPage() {
       const formData = new FormData();
       formData.append('file', importFile);
 
-      const response = await api.post('/v1/mata-pelajaran/import', formData, {
+      const response = await api.post('/mata-pelajaran/import', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

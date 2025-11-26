@@ -87,7 +87,7 @@ export default function TambahJadwalPelajaranPage() {
   const fetchFormOptions = async () => {
     try {
       setOptionsLoading(true);
-      const response = await api.get('/v1/jadwal-pelajaran-form-options');
+      const response = await api.get('/jadwal-pelajaran-form-options');
       if (response.data.success) {
         setFormOptions(prev => ({
           ...prev,
@@ -143,7 +143,7 @@ export default function TambahJadwalPelajaranPage() {
         jam_ke: parseInt(formData.jam_ke)
       };
 
-      const response = await api.post('/v1/jadwal-pelajaran', submitData);
+      const response = await api.post('/jadwal-pelajaran', submitData);
       
       if (response.data.success) {
         alert('Jadwal pelajaran berhasil ditambahkan!');

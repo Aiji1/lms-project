@@ -136,7 +136,7 @@ export default function ModulAjarPage() {
       // Guru options (hanya bila bukan Guru), jangan block jika gagal
       try {
         if (!isGuru) {
-          const res = await api.get('/v1/guru', { params: { per_page: 100, status: 'Aktif' } });
+          const res = await api.get('/guru', { params: { per_page: 100, status: 'Aktif' } });
           const list = Array.isArray(res.data?.data) ? res.data.data : (res.data?.data?.data || []);
           const guruData = list.map((g: any) => ({ value: g.nik_guru, label: g.nama_lengkap || g.nik_guru }));
           setGuruOptions(guruData);
@@ -147,7 +147,7 @@ export default function ModulAjarPage() {
 
       // Mapel options
       try {
-        const res = await api.get('/v1/mata-pelajaran', { params: { per_page: 100, status: 'Aktif' } });
+        const res = await api.get('/mata-pelajaran', { params: { per_page: 100, status: 'Aktif' } });
         const list = Array.isArray(res.data?.data) ? res.data.data : (res.data?.data?.data || []);
         const mapelData = list.map((m: any) => ({ value: m.id_mata_pelajaran, label: m.nama_mata_pelajaran }));
         setMapelOptions(mapelData);
@@ -157,7 +157,7 @@ export default function ModulAjarPage() {
 
       // Kelas options
       try {
-        const res = await api.get('/v1/kelas', { params: { per_page: 100 } });
+        const res = await api.get('/kelas', { params: { per_page: 100 } });
         const list = Array.isArray(res.data?.data) ? res.data.data : (res.data?.data?.data || []);
         const kelasData = list.map((k: any) => ({ value: k.id_kelas, label: k.nama_kelas }));
         setKelasOptions(kelasData);
@@ -171,7 +171,7 @@ export default function ModulAjarPage() {
   async function fetchStats() {
     try {
       setStatsLoading(true);
-      const res = await api.get('/v1/modul-ajar/stats');
+      const res = await api.get('/modul-ajar/stats');
       if (res.data?.success) {
         setStats(res.data.data as StatsData);
       }
@@ -349,7 +349,7 @@ export default function ModulAjarPage() {
       if (uploadKelasId) fd.append('id_kelas', String(uploadKelasId));
       fd.append('file', file);
 
-      const res = await api.post('/v1/modul-ajar', fd, {
+      const res = await api.post('/modul-ajar', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       if (res.data?.success) {

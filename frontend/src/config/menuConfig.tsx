@@ -1,13 +1,14 @@
 import { 
   LayoutDashboard, 
   Users, 
-  BookOpen, 
+  BookOpen,
+  Bell,
+  MessageSquare,
   Calendar, 
   FileText, 
   Settings,
   GraduationCap,
   DollarSign,
-  MessageSquare,
   UserCheck,
   ClipboardList,
   Award,
@@ -18,7 +19,10 @@ import {
   Clock,
   Target,
   AlertTriangle,
-  PieChart
+  PieChart,
+  Camera,
+  BarChart3,
+  QrCode
 } from 'lucide-react';
 
 import { MenuItem } from '@/types/permissions';
@@ -99,7 +103,7 @@ export const universalMenuConfig: MenuItem[] = [
     ]
   },
 
-  // DATA MASTER - Admin & Management Only (Hidden from Guru)
+  // DATA MASTER - Admin & Management Only
   {
     label: 'Data Master',
     icon: <School size={20} />,
@@ -200,18 +204,6 @@ export const universalMenuConfig: MenuItem[] = [
         description: 'Kelola jurnal mengajar harian'
       },
       {
-        label: 'Presensi Harian',
-        href: '/presensi/harian',
-        icon: <UserCheck size={18} />,
-        resourceKey: 'pembelajaran.presensi_harian',
-        permissions: mergePermissions(
-          createPermissionForRoles(['Admin'], FULL_PERMISSIONS),
-          createPermissionForRoles(['Guru'], VIEW_EDIT_PERMISSIONS),
-          createPermissionForRoles(['Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
-        ),
-        description: 'Kelola presensi harian siswa'
-      },
-      {
         label: 'Presensi Mapel',
         href: '/presensi/mapel',
         icon: <Clock size={18} />,
@@ -258,6 +250,65 @@ export const universalMenuConfig: MenuItem[] = [
           createPermissionForRoles(['Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
         ),
         description: 'Upload dan download modul ajar per guru mapel'
+      }
+    ]
+  },
+
+  // ========================================
+  // PRESENSI - Attendance System (NEW SEPARATED MENU)
+  // ========================================
+  {
+    label: 'Presensi',
+    icon: <UserCheck size={20} />,
+    resourceKey: 'presensi',
+    permissions: mergePermissions(
+      createPermissionForRoles(['Admin'], FULL_PERMISSIONS),
+      createPermissionForRoles(['Guru'], VIEW_EDIT_PERMISSIONS),
+      createPermissionForRoles(['Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
+    ),
+    description: 'Sistem presensi harian siswa',
+    children: [
+      {
+        label: 'Dashboard',
+        href: '/presensi/dashboard',
+        icon: <BarChart3 size={18} />,
+        resourceKey: 'presensi.dashboard',
+        permissions: mergePermissions(
+          createPermissionForRoles(['Admin'], FULL_PERMISSIONS),
+          createPermissionForRoles(['Guru', 'Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
+        )
+      },
+      {
+        label: 'Data Presensi',
+        href: '/presensi/harian',
+        icon: <ClipboardList size={18} />,
+        resourceKey: 'presensi.data_presensi',
+        permissions: mergePermissions(
+          createPermissionForRoles(['Admin'], FULL_PERMISSIONS),
+          createPermissionForRoles(['Guru'], VIEW_EDIT_PERMISSIONS),
+          createPermissionForRoles(['Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
+        )
+      },
+      {
+        label: 'QR Code',
+        href: '/presensi/qrcode',
+        icon: <QrCode size={18} />,
+        resourceKey: 'presensi.qrcode',
+        permissions: mergePermissions(
+          createPermissionForRoles(['Admin'], FULL_PERMISSIONS),
+          createPermissionForRoles(['Guru'], VIEW_EDIT_PERMISSIONS),
+          createPermissionForRoles(['Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
+        )
+      },
+      {
+        label: 'Settings',
+        href: '/settings/presensi',
+        icon: <Settings size={18} />,
+        resourceKey: 'settings.presensi',
+        permissions: mergePermissions(
+          createPermissionForRoles(['Admin'], FULL_PERMISSIONS),
+          createPermissionForRoles(['Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
+        )
       }
     ]
   },
@@ -355,7 +406,7 @@ export const universalMenuConfig: MenuItem[] = [
         label: 'Tagihan',
         href: '/keuangan/tagihan',
         icon: <FileText size={18} />,
-        resourceKey: 'keuangan.tagihan',
+        resourceKey: 'tagihan',
         permissions: mergePermissions(
           createPermissionForRoles(['Admin', 'Petugas_Keuangan'], FULL_PERMISSIONS),
           createPermissionForRoles(['Siswa', 'Orang_Tua'], READ_ONLY_PERMISSIONS),
@@ -379,27 +430,22 @@ export const universalMenuConfig: MenuItem[] = [
     label: 'Komunikasi',
     icon: <MessageSquare size={20} />,
     resourceKey: 'komunikasi',
-    permissions: PERMISSION_PRESETS.COMMUNICATION,
-    description: 'Komunikasi dan pengumuman',
+    permissions: mergePermissions(
+      createPermissionForRoles(['Admin', 'Kepala_Sekolah', 'Guru', 'Petugas_Keuangan'], FULL_PERMISSIONS),
+      createPermissionForRoles(['Siswa', 'Orang_Tua'], READ_ONLY_PERMISSIONS)
+    ),
+    description: 'Komunikasi dan pengumuman sekolah',
     children: [
       {
         label: 'Pengumuman',
         href: '/komunikasi/pengumuman',
-        icon: <MessageSquare size={18} />,
-        resourceKey: 'komunikasi.pengumuman',
-        permissions: PERMISSION_PRESETS.UNIVERSAL_VIEW,
-        description: 'Lihat pengumuman sekolah'
-      },
-      {
-        label: 'Buat Pengumuman',
-        href: '/komunikasi/pengumuman/buat',
-        icon: <FileText size={18} />,
-        resourceKey: 'komunikasi.buat_pengumuman',
+        icon: <Bell size={18} />,
+        resourceKey: 'pengumuman',
         permissions: mergePermissions(
-          createPermissionForRoles(['Admin', 'Guru'], FULL_PERMISSIONS),
-          createPermissionForRoles(['Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
+          createPermissionForRoles(['Admin', 'Kepala_Sekolah', 'Guru', 'Petugas_Keuangan'], FULL_PERMISSIONS),
+          createPermissionForRoles(['Siswa', 'Orang_Tua'], READ_ONLY_PERMISSIONS)
         ),
-        description: 'Buat pengumuman baru'
+        description: 'Kelola pengumuman sekolah'
       }
     ]
   },

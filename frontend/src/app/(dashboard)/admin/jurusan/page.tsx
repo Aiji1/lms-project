@@ -42,7 +42,7 @@ export default function JurusanPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/v1/jurusan', {
+      const response = await api.get('/jurusan', {
         params: {
           page: currentPage,
           per_page: 10,
@@ -86,7 +86,7 @@ export default function JurusanPage() {
 
   const handleDownloadTemplate = async () => {
     try {
-      const response = await api.get('/v1/jurusan/template', {
+      const response = await api.get('/jurusan/template', {
         responseType: 'blob'
       });
       
@@ -118,7 +118,7 @@ export default function JurusanPage() {
       const formData = new FormData();
       formData.append('file', importFile);
 
-      const response = await api.post('/v1/jurusan/import', formData, {
+      const response = await api.post('/jurusan/import', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

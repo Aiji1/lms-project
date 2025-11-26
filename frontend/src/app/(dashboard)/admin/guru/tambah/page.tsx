@@ -80,7 +80,7 @@ export default function TambahGuruPage() {
   useEffect(() => {
     const fetchFormData = async () => {
       try {
-        const response = await api.get('/v1/guru-form-data');
+        const response = await api.get('/guru-form-data');
         if (response.data.success) {
           setFormOptions(response.data.data);
         }
@@ -207,7 +207,7 @@ export default function TambahGuruPage() {
 
     setLoading(true);
     try {
-      const response = await api.post('/v1/guru', formData);
+      const response = await api.post('/guru', formData);
       
       if (response.data.success) {
         let userCreationMessage = '';
@@ -222,7 +222,7 @@ export default function TambahGuruPage() {
               reference_id: formData.nik_guru,
               status: userAccount.status
             };
-            const userRes = await api.post('/v1/users', userPayload);
+            const userRes = await api.post('/users', userPayload);
             if (userRes.data?.success) {
               userCreationMessage = '\nAkun user guru berhasil dibuat.';
             }

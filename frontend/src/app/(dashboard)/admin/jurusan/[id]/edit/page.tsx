@@ -69,7 +69,7 @@ export default function EditJurusanPage({ params }: EditJurusanPageProps) {
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/jurusan-form-data');
+      const response = await api.get('/jurusan-form-data');
       if (response.data.success) {
         setFormOptions(response.data.data);
       }

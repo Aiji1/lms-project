@@ -85,7 +85,7 @@ export default function EditMataPelajaranPage({ params }: EditMataPelajaranPageP
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/mata-pelajaran-form-data');
+      const response = await api.get('/mata-pelajaran-form-data');
       if (response.data.success) {
         setFormOptions(response.data.data);
       }

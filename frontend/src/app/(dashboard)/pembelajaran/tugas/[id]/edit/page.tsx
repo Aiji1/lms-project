@@ -191,10 +191,10 @@ export default function EditTugasPage() {
   const fetchFormOptions = async () => {
     try {
       const [guruResponse, kelasResponse, tahunResponse] = await Promise.all([
-        api.get('/v1/guru-form-data'),
+        api.get('/guru-form-data'),
         // Use kelas index endpoint to get actual kelas list (array)
-        api.get('/v1/kelas', { params: { per_page: 200 } }),
-        api.get('/v1/tahun-ajaran-form-data')
+        api.get('/kelas', { params: { per_page: 200 } }),
+        api.get('/tahun-ajaran-form-data')
       ]);
 
       const kelasData = Array.isArray(kelasResponse?.data?.data)

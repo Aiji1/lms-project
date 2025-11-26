@@ -68,7 +68,7 @@ export default function KelasPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/v1/kelas', {
+      const response = await api.get('/kelas', {
         params: {
           page: currentPage,
           per_page: 10,
@@ -93,7 +93,7 @@ export default function KelasPage() {
 
   const fetchFormData = async () => {
     try {
-      const response = await api.get('/v1/kelas-form-data');
+      const response = await api.get('/kelas-form-data');
       if (response.data.success) {
         setFormData(response.data.data);
       }
@@ -127,7 +127,7 @@ export default function KelasPage() {
   const handleDownloadTemplate = async () => {
     try {
       console.log('Downloading template...');
-      const response = await api.get('/v1/kelas/template', {
+      const response = await api.get('/kelas/template', {
         responseType: 'blob'
       });
       
@@ -160,7 +160,7 @@ export default function KelasPage() {
       const formData = new FormData();
       formData.append('file', importFile);
 
-      const response = await api.post('/v1/kelas/import', formData, {
+      const response = await api.post('/kelas/import', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

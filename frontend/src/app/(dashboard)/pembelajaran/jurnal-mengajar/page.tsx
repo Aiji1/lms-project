@@ -16,9 +16,8 @@ import {
   Download
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useAuth } from '@/hooks/useAuth';
-import { getUserPermission, createPermissionForRoles } from '@/lib/permissions';
-import { FULL_PERMISSIONS, READ_ONLY_PERMISSIONS, VIEW_EDIT_PERMISSIONS } from '@/types/permissions';
+import { useRouteProtection } from '@/hooks/useRouteProtection';
+import { usePermission } from '@/hooks/usePermission';
 
 interface JurnalMengajar {
   id_jurnal: number;
@@ -49,26 +48,14 @@ interface ApiResponse {
 }
 
 export default function JurnalMengajarPage() {
-  const { user } = useAuth();
-  
-  // Debug logging
-  console.log('User data:', user);
-  console.log('User type:', user?.user_type);
-  
-  // Permission configuration for Jurnal Mengajar
-  const jurnalMengajarPermissions = createPermissionForRoles({
-    'Admin': FULL_PERMISSIONS,
-    'Guru': FULL_PERMISSIONS,
-    'Kepala_Sekolah': READ_ONLY_PERMISSIONS,
-    'Siswa': READ_ONLY_PERMISSIONS,
-    'Petugas_Keuangan': READ_ONLY_PERMISSIONS,
-    'Orang_Tua': READ_ONLY_PERMISSIONS
+  // 🔒 ROUTE PROTECTION - Redirect if no view permission
+  const { isAuthorized, loading: permLoading } = useRouteProtection({
+    resourceKey: 'pembelajaran.jurnal_mengajar',
+    redirectTo: '/dashboard'
   });
-  
-  const userPermissions = getUserPermission(user?.user_type as any || 'Siswa', jurnalMengajarPermissions);
-  
-  console.log('User permissions:', userPermissions);
-  console.log('Can create:', userPermissions.create);
+
+  // 🔒 GET PERMISSIONS - Get user's CRUD permissions
+  const { canCreate, canEdit, canDelete } = usePermission('pembelajaran.jurnal_mengajar');
 
   const [jurnal, setJurnal] = useState<JurnalMengajar[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +64,7 @@ export default function JurnalMengajarPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const [perPage] = useState(10);
+  
   // Modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedJurnal, setSelectedJurnal] = useState<JurnalMengajar | null>(null);
@@ -84,7 +72,7 @@ export default function JurnalMengajarPage() {
   
   // Filter states - Set default tanggal to today
   const [statusFilter, setStatusFilter] = useState('');
-  const [tanggalFilter, setTanggalFilter] = useState(new Date().toISOString().split('T')[0]); // Default to today
+  const [tanggalFilter, setTanggalFilter] = useState(new Date().toISOString().split('T')[0]);
   const [guruFilter, setGuruFilter] = useState('');
   const [kelasFilter, setKelasFilter] = useState('');
   
@@ -99,7 +87,6 @@ export default function JurnalMengajarPage() {
   // Auto-refresh functionality
   useEffect(() => {
     const interval = setInterval(() => {
-      // Only refresh if we're showing today's data
       if (tanggalFilter === new Date().toISOString().split('T')[0]) {
         fetchJurnal();
       }
@@ -118,27 +105,21 @@ export default function JurnalMengajarPage() {
 
   const fetchDropdownData = async () => {
     try {
-      // Fetch kelas data - get all data without pagination
-      const kelasResponse = await api.get('/v1/kelas?per_page=1000');
-      console.log('Kelas response:', kelasResponse.data);
+      const kelasResponse = await api.get('/kelas?per_page=1000');
       if (kelasResponse.data.success) {
         const mappedKelas = kelasResponse.data.data.map((kelas: any) => ({
           id: kelas.id_kelas,
           nama: kelas.nama_kelas
         }));
-        console.log('Mapped kelas:', mappedKelas);
         setKelasList(mappedKelas);
       }
 
-      // Fetch guru data - get all data without pagination
-      const guruResponse = await api.get('/v1/guru?per_page=1000');
-      console.log('Guru response:', guruResponse.data);
+      const guruResponse = await api.get('/guru?per_page=1000');
       if (guruResponse.data.success && Array.isArray(guruResponse.data.data)) {
         const mappedGuru = guruResponse.data.data.map((guru: any) => ({
           nik: guru.nik_guru,
           nama: guru.nama_lengkap
         }));
-        console.log('Mapped guru:', mappedGuru);
         setGuruList(mappedGuru);
       }
     } catch (error) {
@@ -219,14 +200,6 @@ export default function JurnalMengajarPage() {
     });
   };
 
-  const formatTime = (timeString: string) => {
-    return new Date(timeString).toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  // Export functionality
   const handleExportMonthly = async () => {
     try {
       const params = new URLSearchParams({
@@ -240,7 +213,6 @@ export default function JurnalMengajarPage() {
         responseType: 'blob'
       });
 
-      // Create blob link to download
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -256,13 +228,29 @@ export default function JurnalMengajarPage() {
       link.remove();
       window.URL.revokeObjectURL(url);
       
-      // Close modal after successful export
       setShowExportModal(false);
     } catch (error) {
       console.error('Error exporting data:', error);
       alert('Gagal mengekspor data. Silakan coba lagi.');
     }
   };
+
+  // 🔒 SHOW LOADING WHILE CHECKING AUTH
+  if (permLoading || isAuthorized === null) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-gray-600">Memverifikasi akses...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 🔒 IF NOT AUTHORIZED, RETURN NULL (will redirect)
+  if (!isAuthorized) {
+    return null;
+  }
 
   return (
     <div className="p-6">
@@ -276,31 +264,33 @@ export default function JurnalMengajarPage() {
           <p className="text-gray-600 mt-1">Kelola jurnal mengajar harian guru</p>
         </div>
         
-        <div className="mt-4 sm:mt-0 flex gap-2">
-          <button
-            onClick={() => setShowExportModal(true)}
-            className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            <span className="sm:inline">Export Bulanan</span>
-          </button>
-          
-          {userPermissions.create && (
-            <Link
-              href="/pembelajaran/jurnal-mengajar/tambah"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        {/* 🔒 CONDITIONAL RENDERING - Show buttons only if has permission */}
+        {(canCreate || canEdit) && (
+          <div className="mt-4 sm:mt-0 flex gap-2">
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
-              <Plus className="h-4 w-4 mr-2" />
-              <span className="sm:inline">Tambah Jurnal</span>
-            </Link>
-          )}
-        </div>
+              <Download className="h-4 w-4 mr-2" />
+              <span className="sm:inline">Export Bulanan</span>
+            </button>
+            
+            {canCreate && (
+              <Link
+                href="/pembelajaran/jurnal-mengajar/tambah"
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                <span className="sm:inline">Tambah Jurnal</span>
+              </Link>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <input
@@ -312,7 +302,6 @@ export default function JurnalMengajarPage() {
             />
           </div>
 
-          {/* Status Filter */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -324,7 +313,6 @@ export default function JurnalMengajarPage() {
             <option value="Diganti">Diganti</option>
           </select>
 
-          {/* Tanggal Filter */}
           <input
             type="date"
             value={tanggalFilter}
@@ -332,7 +320,6 @@ export default function JurnalMengajarPage() {
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
 
-          {/* Kelas Filter */}
           <select
             value={kelasFilter}
             onChange={(e) => setKelasFilter(e.target.value)}
@@ -346,7 +333,6 @@ export default function JurnalMengajarPage() {
             ))}
           </select>
 
-          {/* Guru Filter */}
           <select
             value={guruFilter}
             onChange={(e) => setGuruFilter(e.target.value)}
@@ -368,42 +354,25 @@ export default function JurnalMengajarPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  No
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tanggal
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Guru
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Mata Pelajaran
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Kelas
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Jam Ke
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Materi
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Keterangan Tambahan
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Aksi
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guru</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mata Pelajaran</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kelas</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jam Ke</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Materi</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keterangan</th>
+                {/* 🔒 Only show Actions column if user has any action permission */}
+                {(canEdit || canDelete) && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={canEdit || canDelete ? 10 : 9} className="px-6 py-4 text-center text-gray-500">
                     Memuat data...
                   </td>
                 </tr>
@@ -450,9 +419,11 @@ export default function JurnalMengajarPage() {
                         {item.keterangan_tambahan || '-'}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-2">
-                        {userPermissions.view && (
+                    {/* 🔒 CONDITIONAL ACTION BUTTONS based on permission */}
+                    {(canEdit || canDelete) && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex items-center space-x-2">
+                          {/* View detail - selalu ada untuk yang punya akses view */}
                           <Link
                             href={`/pembelajaran/jurnal-mengajar/${item.id_jurnal}`}
                             className="text-blue-600 hover:text-blue-900 p-1 rounded"
@@ -460,32 +431,36 @@ export default function JurnalMengajarPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
-                        )}
-                        {userPermissions.edit && (
-                          <Link
-                            href={`/pembelajaran/jurnal-mengajar/${item.id_jurnal}/edit`}
-                            className="text-green-600 hover:text-green-900 p-1 rounded"
-                            title="Edit"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Link>
-                        )}
-                        {userPermissions.delete && (
-                          <button
-                            onClick={() => handleDelete(item)}
-                            className="text-red-600 hover:text-red-900 p-1 rounded"
-                            title="Hapus"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
+                          
+                          {/* 🔒 Edit - hanya jika canEdit */}
+                          {canEdit && (
+                            <Link
+                              href={`/pembelajaran/jurnal-mengajar/${item.id_jurnal}/edit`}
+                              className="text-green-600 hover:text-green-900 p-1 rounded"
+                              title="Edit"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Link>
+                          )}
+                          
+                          {/* 🔒 Delete - hanya jika canDelete */}
+                          {canDelete && (
+                            <button
+                              onClick={() => handleDelete(item)}
+                              className="text-red-600 hover:text-red-900 p-1 rounded"
+                              title="Hapus"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={10} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={canEdit || canDelete ? 10 : 9} className="px-6 py-4 text-center text-gray-500">
                     {search || statusFilter || tanggalFilter || guruFilter ? 'Tidak ada data yang ditemukan' : 'Belum ada data jurnal mengajar'}
                   </td>
                 </tr>
@@ -522,7 +497,7 @@ export default function JurnalMengajarPage() {
                 </p>
               </div>
               <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
@@ -538,7 +513,7 @@ export default function JurnalMengajarPage() {
                         onClick={() => setCurrentPage(page)}
                         className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                           currentPage === page
-                            ? 'z-10 bg-blue-500 border-blue-500 text-blue-600'
+                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
                             : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                         }`}
                       >
@@ -613,9 +588,7 @@ export default function JurnalMengajarPage() {
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tahun
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tahun</label>
                   <select
                     value={exportYear}
                     onChange={(e) => setExportYear(parseInt(e.target.value))}
@@ -624,18 +597,14 @@ export default function JurnalMengajarPage() {
                     {Array.from({ length: 10 }, (_, i) => {
                       const year = new Date().getFullYear() - 5 + i;
                       return (
-                        <option key={year} value={year}>
-                          {year}
-                        </option>
+                        <option key={year} value={year}>{year}</option>
                       );
                     })}
                   </select>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Bulan
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Bulan</label>
                   <select
                     value={exportMonth}
                     onChange={(e) => setExportMonth(parseInt(e.target.value))}
@@ -645,9 +614,7 @@ export default function JurnalMengajarPage() {
                       'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
                       'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
                     ].map((month, index) => (
-                      <option key={index + 1} value={index + 1}>
-                        {month}
-                      </option>
+                      <option key={index + 1} value={index + 1}>{month}</option>
                     ))}
                   </select>
                 </div>
@@ -656,13 +623,13 @@ export default function JurnalMengajarPage() {
               <div className="flex justify-end space-x-2 mt-6">
                 <button
                   onClick={() => setShowExportModal(false)}
-                  className="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  className="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md hover:bg-gray-600"
                 >
                   Batal
                 </button>
                 <button
                   onClick={handleExportMonthly}
-                  className="px-4 py-2 bg-green-600 text-white text-base font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300"
+                  className="px-4 py-2 bg-green-600 text-white text-base font-medium rounded-md hover:bg-green-700"
                 >
                   Export
                 </button>

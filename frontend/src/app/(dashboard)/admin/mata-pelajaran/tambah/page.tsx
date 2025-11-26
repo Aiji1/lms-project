@@ -53,7 +53,7 @@ export default function TambahMataPelajaranPage() {
   const fetchFormOptions = async () => {
     try {
       setOptionsLoading(true);
-      const response = await api.get('/v1/mata-pelajaran-form-data');
+      const response = await api.get('/mata-pelajaran-form-data');
       if (response.data.success) {
         setFormOptions(response.data.data);
       }
@@ -87,7 +87,7 @@ export default function TambahMataPelajaranPage() {
     setFormErrors({});
 
     try {
-      const response = await api.post('/v1/mata-pelajaran', formData);
+      const response = await api.post('/mata-pelajaran', formData);
       
       if (response.data.success) {
         alert('Mata pelajaran berhasil ditambahkan!');

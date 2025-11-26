@@ -82,7 +82,7 @@ export default function TambahNilaiSiswaPage() {
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/nilai-form-data');
+      const response = await api.get('/nilai-form-data');
       if (response.data.success) {
         setFormOptions(response.data.data);
         
@@ -175,7 +175,7 @@ export default function TambahNilaiSiswaPage() {
       console.log('Token:', localStorage.getItem('token'));
       console.log('User:', localStorage.getItem('user'));
 
-      const response = await api.post('/v1/nilai', submitData);
+      const response = await api.post('/nilai', submitData);
       
       if (response.data.success) {
         router.push('/pembelajaran/nilai-siswa');

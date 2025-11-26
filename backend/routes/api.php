@@ -23,7 +23,6 @@ use App\Http\Controllers\Api\EvaluasiHafalanController;
 use App\Http\Controllers\Api\NilaiController;
 use App\Http\Controllers\Api\PelanggaranController;
 use App\Http\Controllers\TugasController;
-use App\Http\Controllers\PermissionOverrideController;
 use App\Http\Controllers\Api\JenisPembayaranController;
 use App\Http\Controllers\Api\TagihanController;
 use App\Http\Controllers\Api\PembayaranController;
@@ -31,6 +30,10 @@ use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\AdabComponentController;
 use App\Http\Controllers\Api\AdabQuestionController;
 use App\Http\Controllers\Api\AdabQuestionnaireResponseController;
+use App\Http\Controllers\Api\PengumumanController;
+use App\Http\Controllers\Api\PermissionOverrideController;
+use App\Http\Controllers\Api\QRCodeController;
+use App\Http\Controllers\Api\SettingsController;
 
 Route::middleware('custom.auth')->get('/user', function (Request $request) {
     return $request->user();
@@ -146,13 +149,29 @@ Route::prefix('v1')->group(function () {
         // Jadwal Pelajaran API Resource
         Route::apiResource('jadwal-pelajaran', JadwalPelajaranController::class);
         
-        // PRESENSI ROUTES
-        // Presensi Harian form data
+        // ========================================
+        // PRESENSI HARIAN ROUTES (UPDATED)
+        // ========================================
+        // Form data
         Route::get('/presensi-harian-form-data', [PresensiHarianController::class, 'getFormData']);
         
-        // Presensi Harian API Resource
+        // ===== NEW ROUTES untuk Scan System =====
+        // Scan Masuk & Pulang (untuk RFID, NFC, Fingerprint, QR Code)
+        Route::post('/presensi-harian/scan-masuk', [PresensiHarianController::class, 'scanMasuk']);
+        Route::post('/presensi-harian/scan-pulang', [PresensiHarianController::class, 'scanPulang']);
+        
+        // Statistics & History
+        Route::get('/presensi-harian/today-stats', [PresensiHarianController::class, 'getTodayStats']);
+        Route::get('/presensi-harian/siswa/{nis}', [PresensiHarianController::class, 'getSiswaHistory']);
+        
+        // Manual Input (for admin/teacher)
+        Route::post('/presensi-harian/manual', [PresensiHarianController::class, 'manualInput']);
+        // ===== END NEW ROUTES =====
+        
+        // Presensi Harian API Resource (CRUD standard)
         Route::apiResource('presensi-harian', PresensiHarianController::class);
         
+        // PRESENSI MAPEL ROUTES
         // Presensi Mapel form data
         Route::get('/presensi-mapel-form-data', [PresensiMapelController::class, 'getFormData']);
         
@@ -190,24 +209,33 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('modul-ajar', \App\Http\Controllers\Api\ModulAjarController::class);
 
         // KEDISIPLINAN - PELANGGARAN ROUTES
-        // Form data route HARUS di atas apiResource
+        Route::apiResource('jenis-pelanggaran', \App\Http\Controllers\Api\JenisPelanggaranController::class);
         Route::get('/pelanggaran-form-data', [PelanggaranController::class, 'getFormData']);
-        // Pelanggaran API Resource
         Route::apiResource('pelanggaran', PelanggaranController::class);
 
         // KEUANGAN ROUTES
         // Form data routes HARUS di atas apiResource
         Route::get('/jenis-pembayaran-form-data', [JenisPembayaranController::class, 'getFormData']);
         Route::get('/tagihan-form-data', [TagihanController::class, 'getFormData']);
-        
+
+        // Dashboard tagihan stats (untuk petugas keuangan)
+        Route::get('/tagihan-dashboard-stats', [TagihanController::class, 'getDashboardStats']);
+
+        // Tagihan by NIS (untuk siswa/ortu)
+        Route::get('/tagihan/siswa/{nis}', [TagihanController::class, 'getByNis']);
+
+        // Konfirmasi pembayaran
+        Route::post('/tagihan/{id}/konfirmasi-pembayaran', [TagihanController::class, 'konfirmasiPembayaran']);
+
+        // Route khusus generate tagihan HARUS di atas apiResource
+        Route::post('/jenis-pembayaran/{id}/generate-tagihan', [JenisPembayaranController::class, 'generateTagihan']);
+
         // API Resources
+        Route::get('/jenis-pembayaran/template', [JenisPembayaranController::class, 'template']);
+        Route::get('/jenis-pembayaran/export', [JenisPembayaranController::class, 'export']);
         Route::apiResource('jenis-pembayaran', JenisPembayaranController::class);
         Route::apiResource('tagihan', TagihanController::class);
         Route::apiResource('pembayaran', PembayaranController::class);
-
-        // PERMISSION OVERRIDES ROUTES
-        Route::get('/permission-overrides/merged', [PermissionOverrideController::class, 'merged']);
-        Route::apiResource('permission-overrides', PermissionOverrideController::class);
         
         // HAFALAN ROUTES
         // Form data routes HARUS di atas apiResource
@@ -252,7 +280,34 @@ Route::prefix('v1')->group(function () {
         // Tugas API Resource
         Route::apiResource('tugas', TugasController::class);
 
-        // Test Route
+        // LAPORAN ROUTES
+        Route::get('/laporan/form-data', [LaporanController::class, 'getFormData']);
+        Route::get('/laporan/presensi', [LaporanController::class, 'presensi']);
+        Route::get('/laporan/tahfidz', [LaporanController::class, 'tahfidz']);
+        Route::get('/laporan/statistik', [LaporanController::class, 'statistik']);
+
+        Route::get('/tagihan-pivot', [TagihanController::class, 'getPivotView']);
+        Route::post('/tagihan-pembayaran-summary', [TagihanController::class, 'getPembayaranSummary']);
+
+        // PENGUMUMAN ROUTES
+        // Form data route HARUS di atas apiResource
+        Route::get('/pengumuman/form-data', [\App\Http\Controllers\Api\PengumumanController::class, 'getFormData']);
+        Route::get('/pengumuman/unread-count', [\App\Http\Controllers\Api\PengumumanController::class, 'getUnreadCount']);
+        Route::post('/pengumuman/{id}/mark-read', [\App\Http\Controllers\Api\PengumumanController::class, 'markAsRead']);
+        Route::post('/pengumuman/{id}/toggle-pin', [\App\Http\Controllers\Api\PengumumanController::class, 'togglePin']);
+        
+        // Pengumuman API Resource
+        Route::apiResource('pengumuman', \App\Http\Controllers\Api\PengumumanController::class);
+        
+        // PERMISSION OVERRIDE ROUTES
+        Route::get('/permission-overrides', [\App\Http\Controllers\Api\PermissionOverrideController::class, 'index']);
+        Route::get('/permission-overrides/merged', [\App\Http\Controllers\Api\PermissionOverrideController::class, 'merged']);
+        Route::post('/permission-overrides/check', [\App\Http\Controllers\Api\PermissionOverrideController::class, 'check']);
+        Route::post('/permission-overrides', [\App\Http\Controllers\Api\PermissionOverrideController::class, 'store']);
+        Route::put('/permission-overrides/{id}', [\App\Http\Controllers\Api\PermissionOverrideController::class, 'update']);
+        Route::delete('/permission-overrides/{id}', [\App\Http\Controllers\Api\PermissionOverrideController::class, 'destroy']);
+
+        // TEST ROUTE
         Route::get('/test', function () {
             return response()->json([
                 'success' => true,
@@ -261,12 +316,36 @@ Route::prefix('v1')->group(function () {
             ]);
         });
 
-        // LAPORAN ROUTES
-        Route::get('/laporan/form-data', [LaporanController::class, 'getFormData']);
-        Route::get('/laporan/presensi', [LaporanController::class, 'presensi']);
-        Route::get('/laporan/tahfidz', [LaporanController::class, 'tahfidz']);
-        Route::get('/laporan/statistik', [LaporanController::class, 'statistik']);
-        
+        // ========================================
+        // QR CODE ROUTES (ADD THIS SECTION)
+        // ========================================
+
+        // QR Code routes (inside custom.auth middleware group)
+        // Generate QR Code untuk satu siswa
+        Route::get('/qrcode/generate/{nis}', [QRCodeController::class, 'generateSingle']);
+
+        // Generate QR Code untuk semua siswa
+        Route::post('/qrcode/generate-all', [QRCodeController::class, 'generateAll']);
+
+        // Get QR Code info
+        Route::get('/qrcode/info/{nis}', [QRCodeController::class, 'getInfo']);
+
+        // Delete QR Code
+        Route::delete('/qrcode/{nis}', [QRCodeController::class, 'delete']);
+
+        // Download QR Code
+        Route::get('/qrcode/download/{nis}', [QRCodeController::class, 'download']);
+
+        // Generate custom QR Code (untuk testing)
+        Route::post('/qrcode/custom', [QRCodeController::class, 'generateCustom']);
+
+        // SETTINGS ROUTES
+        Route::get('/settings', [SettingsController::class, 'index']);
+        Route::get('/settings/presensi', [SettingsController::class, 'getPresensiSettings']);
+        Route::get('/settings/{key}', [SettingsController::class, 'show']);
+        Route::put('/settings/{key}', [SettingsController::class, 'update']);
+        Route::post('/settings/bulk-update', [SettingsController::class, 'bulkUpdate']);
+
     }); // End of custom.auth middleware group
     
 }); // End of v1 prefix group

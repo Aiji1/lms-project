@@ -1,0 +1,8 @@
+              
+                href={`https://www.google.com/maps?q=${settings.school_latitude},${settings.school_longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline mt-2 inline-block"
+              >
+                Lihat di Google Maps →
+              </a>

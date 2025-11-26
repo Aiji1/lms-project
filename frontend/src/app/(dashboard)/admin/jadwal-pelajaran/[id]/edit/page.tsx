@@ -104,7 +104,7 @@ export default function EditJadwalPelajaranPage({ params }: EditJadwalPelajaranP
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/jadwal-pelajaran-form-data');
+      const response = await api.get('/jadwal-pelajaran-form-data');
       if (response.data.success) {
         setFormOptions(prev => ({
           ...prev,

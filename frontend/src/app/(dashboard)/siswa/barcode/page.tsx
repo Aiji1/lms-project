@@ -61,7 +61,7 @@ export default function StudentBarcodePage() {
       setLoading(true);
       setError(null);
       
-      const response = await api.get('/v1/my-barcode');
+      const response = await api.get('/my-barcode');
       console.log('Barcode API response:', response.data);
       
       if (response.data.success) {

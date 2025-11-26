@@ -85,7 +85,7 @@ export default function EditKelasPage() {
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/kelas-form-data');
+      const response = await api.get('/kelas-form-data');
       if (response.data.success) {
         setFormOptions(response.data.data);
       }

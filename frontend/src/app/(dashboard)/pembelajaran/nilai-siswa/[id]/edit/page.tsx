@@ -130,7 +130,7 @@ export default function EditNilaiSiswaPage() {
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/nilai-form-data');
+      const response = await api.get('/nilai-form-data');
       if (response.data.success) {
         setFormOptions(response.data.data);
       }

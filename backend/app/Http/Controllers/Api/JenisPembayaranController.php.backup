@@ -1,0 +1,342 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
+
+class JenisPembayaranController extends Controller
+{
+    /**
+     * Form data untuk jenis pembayaran
+     */
+    public function getFormData(Request $request)
+    {
+        try {
+            // Jika ada tabel jenis_pembayaran, gunakan itu; jika tidak, fallback ke options statis
+            $exists = DB::getSchemaBuilder()->hasTable('jenis_pembayaran');
+            if ($exists) {
+                $hasOldCols = DB::getSchemaBuilder()->hasColumn('jenis_pembayaran', 'id_jenis_pembayaran')
+                    && DB::getSchemaBuilder()->hasColumn('jenis_pembayaran', 'nama_pembayaran');
+                if ($hasOldCols) {
+                    $rows = DB::table('jenis_pembayaran')
+                        ->select('id_jenis_pembayaran', 'nama_pembayaran', 'status')
+                        ->where('status', 'Aktif')
+                        ->orderBy('nama_pembayaran')
+                        ->get();
+                    $mapped = $rows->map(function ($r) {
+                        $nama = (string)($r->nama_pembayaran ?? '');
+                        $kode = strtoupper(preg_replace('/[^A-Z0-9_]/', '', str_replace(' ', '_', $nama)));
+                        return [
+                            'id' => (int)($r->id_jenis_pembayaran ?? 0),
+                            'kode' => $kode,
+                            'nama' => $nama,
+                        ];
+                    });
+                    return response()->json(['success' => true, 'data' => $mapped]);
+                }
+
+                $rows = DB::table('jenis_pembayaran')
+                    ->select('id', 'kode', 'nama')
+                    ->where('status', 'Aktif')
+                    ->orderBy('nama')
+                    ->get();
+                return response()->json(['success' => true, 'data' => $rows]);
+            }
+
+            $options = [
+                ['id' => 1, 'kode' => 'SPP', 'nama' => 'SPP Bulanan'],
+                ['id' => 2, 'kode' => 'DAFTAR_ULANG', 'nama' => 'Daftar Ulang'],
+                ['id' => 3, 'kode' => 'SERAGAM', 'nama' => 'Seragam']
+            ];
+
+            return response()->json(['success' => true, 'data' => $options]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengambil form data jenis pembayaran',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * List jenis pembayaran
+     */
+    public function index(Request $request)
+    {
+        try {
+            $exists = DB::getSchemaBuilder()->hasTable('jenis_pembayaran');
+            if ($exists) {
+                // Deteksi skema kolom lama (id_jenis_pembayaran, nama_pembayaran, nominal, periode)
+                $hasOldCols = DB::getSchemaBuilder()->hasColumn('jenis_pembayaran', 'id_jenis_pembayaran')
+                    && DB::getSchemaBuilder()->hasColumn('jenis_pembayaran', 'nama_pembayaran');
+                if ($hasOldCols) {
+                    $rows = DB::table('jenis_pembayaran')
+                        ->select('id_jenis_pembayaran', 'nama_pembayaran', 'nominal', 'periode', 'status')
+                        ->orderBy('nama_pembayaran')
+                        ->get();
+                    // Map ke struktur baru yang diharapkan frontend
+                    $mapped = $rows->map(function ($r) {
+                        $nama = (string)($r->nama_pembayaran ?? '');
+                        $kode = strtoupper(preg_replace('/[^A-Z0-9_]/', '', str_replace(' ', '_', $nama)));
+                        // Jadikan periode sebagai deskripsi sederhana untuk kompatibilitas
+                        $deskripsi = !empty($r->periode) ? (string)$r->periode : null;
+                        return [
+                            'id' => (int)($r->id_jenis_pembayaran ?? 0),
+                            'kode' => $kode,
+                            'nama' => $nama,
+                            'nominal_default' => (int)($r->nominal ?? 0),
+                            'deskripsi' => $deskripsi,
+                            'status' => (string)($r->status ?? 'Aktif'),
+                        ];
+                    });
+                    return response()->json(['success' => true, 'data' => $mapped]);
+                }
+
+                // Skema baru (id, kode, nama, nominal_default, deskripsi, status)
+                $rows = DB::table('jenis_pembayaran')
+                    ->select('id', 'kode', 'nama', 'nominal_default', 'deskripsi', 'status')
+                    ->orderBy('nama')
+                    ->get();
+                return response()->json(['success' => true, 'data' => $rows]);
+            }
+
+            $mock = [
+                ['id' => 1, 'kode' => 'SPP', 'nama' => 'SPP Bulanan', 'nominal_default' => 250000, 'deskripsi' => 'Iuran bulanan', 'status' => 'Aktif'],
+                ['id' => 2, 'kode' => 'DAFTAR_ULANG', 'nama' => 'Daftar Ulang', 'nominal_default' => 750000, 'deskripsi' => 'Tahunan', 'status' => 'Aktif'],
+                ['id' => 3, 'kode' => 'SERAGAM', 'nama' => 'Seragam', 'nominal_default' => 500000, 'deskripsi' => 'Paket seragam', 'status' => 'Non-aktif'],
+            ];
+            return response()->json(['success' => true, 'data' => $mock]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Gagal mengambil data jenis pembayaran', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /** Detail jenis pembayaran */
+    public function show($id)
+    {
+        try {
+            $exists = DB::getSchemaBuilder()->hasTable('jenis_pembayaran');
+            if ($exists) {
+                $hasOldCols = DB::getSchemaBuilder()->hasColumn('jenis_pembayaran', 'id_jenis_pembayaran')
+                    && DB::getSchemaBuilder()->hasColumn('jenis_pembayaran', 'nama_pembayaran');
+                if ($hasOldCols) {
+                    $row = DB::table('jenis_pembayaran')
+                        ->select('id_jenis_pembayaran', 'nama_pembayaran', 'nominal', 'periode', 'status')
+                        ->where('id_jenis_pembayaran', $id)
+                        ->first();
+                    if (!$row) return response()->json(['success' => false, 'message' => 'Data tidak ditemukan'], 404);
+                    $nama = (string)($row->nama_pembayaran ?? '');
+                    $kode = strtoupper(preg_replace('/[^A-Z0-9_]/', '', str_replace(' ', '_', $nama)));
+                    $deskripsi = !empty($row->periode) ? (string)$row->periode : null;
+                    return response()->json(['success' => true, 'data' => [
+                        'id' => (int)($row->id_jenis_pembayaran ?? 0),
+                        'kode' => $kode,
+                        'nama' => $nama,
+                        'nominal_default' => (int)($row->nominal ?? 0),
+                        'deskripsi' => $deskripsi,
+                        'status' => (string)($row->status ?? 'Aktif'),
+                    ]]);
+                }
+
+                $row = DB::table('jenis_pembayaran')
+                    ->select('id', 'kode', 'nama', 'nominal_default', 'deskripsi', 'status')
+                    ->where('id', $id)
+                    ->first();
+                if (!$row) return response()->json(['success' => false, 'message' => 'Data tidak ditemukan'], 404);
+                return response()->json(['success' => true, 'data' => $row]);
+            }
+
+            $mock = ['id' => (int)$id, 'kode' => 'SPP', 'nama' => 'SPP Bulanan', 'nominal_default' => 250000, 'deskripsi' => 'Iuran bulanan', 'status' => 'Aktif'];
+            return response()->json(['success' => true, 'data' => $mock]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Gagal mengambil detail jenis pembayaran', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /** Simpan jenis pembayaran */
+    public function store(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'kode' => 'required|string|max:50|unique:jenis_pembayaran,kode',
+            'nama' => 'required|string|max:100',
+            'nominal_default' => 'required|integer|min:0',
+            // Frontend bisa mengirim object, izinkan string atau array
+            'deskripsi' => 'nullable',
+            'status' => 'required|in:Aktif,Non-aktif'
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => 'Validasi gagal', 'errors' => $validator->errors()], 422);
+        }
+
+        try {
+            $exists = DB::getSchemaBuilder()->hasTable('jenis_pembayaran');
+            if ($exists) {
+                // Cek apakah kode sudah ada (double check untuk keamanan)
+                $kodeExists = DB::table('jenis_pembayaran')->where('kode', $request->kode)->exists();
+                if ($kodeExists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Kode pembayaran sudah digunakan. Silakan gunakan kode lain atau ubah nama pembayaran.',
+                        'errors' => ['kode' => ['Kode pembayaran sudah digunakan']]
+                    ], 422);
+                }
+
+                // Insert yang kompatibel dengan skema lama DAN baru: isi semua kolom yang tersedia
+                $columns = Schema::getColumnListing('jenis_pembayaran');
+                $cols = array_flip($columns);
+                $insert = [];
+
+                // Isi kolom baru jika ada
+                if (isset($cols['kode'])) { $insert['kode'] = $request->kode; }
+                if (isset($cols['nama'])) { $insert['nama'] = $request->nama; }
+                if (isset($cols['nominal_default'])) { $insert['nominal_default'] = (int)$request->nominal_default; }
+                if (isset($cols['deskripsi'])) { $insert['deskripsi'] = $this->normalizeDeskripsi($request->deskripsi); }
+                if (isset($cols['status'])) { $insert['status'] = $request->status; }
+
+                // PENTING: Isi juga kolom lama untuk backward compatibility
+                if (isset($cols['nama_pembayaran'])) { $insert['nama_pembayaran'] = $request->nama; }
+                if (isset($cols['nominal'])) { $insert['nominal'] = (int)$request->nominal_default; }
+                if (isset($cols['periode'])) {
+                    // Set periode ke 'Bulanan' sebagai default jika tidak ada deskripsi yang valid
+                    $insert['periode'] = 'Bulanan';
+                }
+
+                // Jika tidak ada kolom yang dikenali, fallback minimal nama & status
+                if (empty($insert)) { $insert = ['nama' => $request->nama, 'status' => $request->status]; }
+
+                // Gunakan insert biasa; untuk MySQL auto-increment lastInsertId akan terisi walau nama PK bukan 'id'
+                DB::table('jenis_pembayaran')->insert($insert);
+                $id = DB::getPdo()->lastInsertId();
+                return response()->json(['success' => true, 'data' => ['id' => $id], 'message' => 'Jenis pembayaran berhasil ditambahkan'], 201);
+            }
+
+            return response()->json(['success' => true, 'message' => 'Mock: jenis pembayaran disimpan'], 201);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Handle duplicate key error
+            if ($e->getCode() == 23000) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Kode pembayaran sudah digunakan. Silakan gunakan kode lain atau ubah nama pembayaran.',
+                    'errors' => ['kode' => ['Kode pembayaran sudah digunakan']]
+                ], 422);
+            }
+            return response()->json(['success' => false, 'message' => 'Gagal menyimpan jenis pembayaran', 'error' => $e->getMessage()], 500);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Gagal menyimpan jenis pembayaran', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /** Update jenis pembayaran */
+    public function update(Request $request, $id)
+    {
+        try {
+            $exists = DB::getSchemaBuilder()->hasTable('jenis_pembayaran');
+            if (!$exists) {
+                return response()->json(['success' => true, 'message' => 'Mock: jenis pembayaran diperbarui']);
+            }
+
+            // Deteksi primary key
+            $pk = Schema::hasColumn('jenis_pembayaran', 'id') ? 'id' : (Schema::hasColumn('jenis_pembayaran', 'id_jenis_pembayaran') ? 'id_jenis_pembayaran' : 'id');
+
+            // Cek apakah data exist
+            $existingData = DB::table('jenis_pembayaran')->where($pk, $id)->first();
+            if (!$existingData) {
+                return response()->json(['success' => false, 'message' => 'Data tidak ditemukan'], 404);
+            }
+
+            // Validasi dengan unique rule yang mengecualikan ID saat ini
+            $validator = Validator::make($request->all(), [
+                'kode' => 'sometimes|string|max:50|unique:jenis_pembayaran,kode,' . $id . ',' . $pk,
+                'nama' => 'sometimes|string|max:100',
+                'nominal_default' => 'sometimes|integer|min:0',
+                'deskripsi' => 'nullable',
+                'status' => 'sometimes|in:Aktif,Non-aktif'
+            ]);
+            if ($validator->fails()) {
+                return response()->json(['success' => false, 'message' => 'Validasi gagal', 'errors' => $validator->errors()], 422);
+            }
+
+            // Jika ada perubahan kode, cek apakah sudah digunakan
+            if ($request->has('kode') && $request->kode !== $existingData->kode) {
+                $kodeExists = DB::table('jenis_pembayaran')
+                    ->where('kode', $request->kode)
+                    ->where($pk, '!=', $id)
+                    ->exists();
+                if ($kodeExists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Kode pembayaran sudah digunakan. Silakan gunakan kode lain.',
+                        'errors' => ['kode' => ['Kode pembayaran sudah digunakan']]
+                    ], 422);
+                }
+            }
+
+            $columns = Schema::getColumnListing('jenis_pembayaran');
+            $cols = array_flip($columns);
+            $payload = [];
+
+            // Update kolom baru jika ada
+            if (isset($cols['kode']) && $request->has('kode')) { $payload['kode'] = $request->kode; }
+            if (isset($cols['nama']) && $request->has('nama')) { $payload['nama'] = $request->nama; }
+            if (isset($cols['nominal_default']) && $request->has('nominal_default')) { $payload['nominal_default'] = (int)$request->nominal_default; }
+            if (isset($cols['deskripsi']) && $request->has('deskripsi')) { $payload['deskripsi'] = $this->normalizeDeskripsi($request->deskripsi); }
+            if (isset($cols['status']) && $request->has('status')) { $payload['status'] = $request->status; }
+
+            // PENTING: Update juga kolom lama untuk sinkronisasi
+            if (isset($cols['nama_pembayaran']) && $request->has('nama')) { $payload['nama_pembayaran'] = $request->nama; }
+            if (isset($cols['nominal']) && $request->has('nominal_default')) { $payload['nominal'] = (int)$request->nominal_default; }
+
+            if (empty($payload)) {
+                return response()->json(['success' => false, 'message' => 'Tidak ada data yang diperbarui'], 400);
+            }
+
+            DB::table('jenis_pembayaran')->where($pk, $id)->update($payload);
+            return response()->json(['success' => true, 'message' => 'Jenis pembayaran berhasil diperbarui']);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Handle duplicate key error
+            if ($e->getCode() == 23000) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Kode pembayaran sudah digunakan. Silakan gunakan kode lain.',
+                    'errors' => ['kode' => ['Kode pembayaran sudah digunakan']]
+                ], 422);
+            }
+            return response()->json(['success' => false, 'message' => 'Gagal memperbarui jenis pembayaran', 'error' => $e->getMessage()], 500);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Gagal memperbarui jenis pembayaran', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Helper untuk normalisasi field deskripsi yang bisa berupa string atau array/object.
+     */
+    private function normalizeDeskripsi($deskripsi)
+    {
+        if (is_null($deskripsi)) return null;
+        if (is_string($deskripsi)) return $deskripsi;
+        // Encode array/object ke JSON string agar kompatibel dengan kolom JSON
+        return json_encode($deskripsi);
+    }
+
+    /** Hapus jenis pembayaran */
+    public function destroy($id)
+    {
+        try {
+            $exists = DB::getSchemaBuilder()->hasTable('jenis_pembayaran');
+            if ($exists) {
+                $pk = Schema::hasColumn('jenis_pembayaran', 'id') ? 'id' : (Schema::hasColumn('jenis_pembayaran', 'id_jenis_pembayaran') ? 'id_jenis_pembayaran' : 'id');
+                $deleted = DB::table('jenis_pembayaran')->where($pk, $id)->delete();
+                if (!$deleted) return response()->json(['success' => false, 'message' => 'Data tidak ditemukan'], 404);
+                return response()->json(['success' => true, 'message' => 'Jenis pembayaran dihapus']);
+            }
+            return response()->json(['success' => true, 'message' => 'Mock: jenis pembayaran dihapus']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Gagal menghapus jenis pembayaran', 'error' => $e->getMessage()], 500);
+        }
+    }
+}

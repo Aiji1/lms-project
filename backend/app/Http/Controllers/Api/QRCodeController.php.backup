@@ -1,0 +1,102 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Services\QRCodeService;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+
+class QRCodeController extends Controller
+{
+    protected $qrCodeService;
+
+    public function __construct(QRCodeService $qrCodeService)
+    {
+        $this->qrCodeService = $qrCodeService;
+    }
+
+    /**
+     * Generate QR Code untuk satu siswa
+     * GET /api/v1/qrcode/generate/{nis}
+     */
+    public function generateSingle(string $nis): JsonResponse
+    {
+        $regenerate = request()->boolean('regenerate', false);
+        $result = $this->qrCodeService->generateStudentQRCode($nis, $regenerate);
+        
+        return response()->json($result, $result['success'] ? 200 : 400);
+    }
+
+    /**
+     * Generate QR Code untuk semua siswa
+     * POST /api/v1/qrcode/generate-all
+     */
+    public function generateAll(Request $request): JsonResponse
+    {
+        $regenerate = $request->boolean('regenerate', false);
+        $result = $this->qrCodeService->generateAllStudentQRCodes($regenerate);
+        
+        return response()->json($result, $result['success'] ? 200 : 400);
+    }
+
+    /**
+     * Get QR Code info untuk satu siswa
+     * GET /api/v1/qrcode/info/{nis}
+     */
+    public function getInfo(string $nis): JsonResponse
+    {
+        $result = $this->qrCodeService->getStudentQRCodeInfo($nis);
+        
+        return response()->json($result, $result['success'] ? 200 : 404);
+    }
+
+    /**
+     * Delete QR Code untuk satu siswa
+     * DELETE /api/v1/qrcode/{nis}
+     */
+    public function delete(string $nis): JsonResponse
+    {
+        $result = $this->qrCodeService->deleteStudentQRCode($nis);
+        
+        return response()->json($result, $result['success'] ? 200 : 404);
+    }
+
+    /**
+     * Generate custom QR Code (untuk testing)
+     * POST /api/v1/qrcode/custom
+     */
+    public function generateCustom(Request $request): JsonResponse
+    {
+        $request->validate([
+            'content' => 'required|string',
+            'filename' => 'required|string'
+        ]);
+
+        $result = $this->qrCodeService->generateCustomQRCode(
+            $request->content,
+            $request->filename
+        );
+        
+        return response()->json($result, $result['success'] ? 200 : 400);
+    }
+
+    /**
+     * Download QR Code
+     * GET /api/v1/qrcode/download/{nis}
+     */
+    public function download(string $nis)
+    {
+        $qrPath = "qrcodes/students/{$nis}.png";
+        $fullPath = storage_path("app/public/{$qrPath}");
+
+        if (!file_exists($fullPath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'QR Code tidak ditemukan'
+            ], 404);
+        }
+
+        return response()->download($fullPath, "QR-{$nis}.png");
+    }
+}

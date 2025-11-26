@@ -78,7 +78,7 @@ export default function JadwalPelajaranPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/v1/jadwal-pelajaran', {
+      const response = await api.get('/jadwal-pelajaran', {
         params: {
           page: 1,
           per_page: 200,
@@ -102,7 +102,7 @@ export default function JadwalPelajaranPage() {
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/jadwal-pelajaran-form-options');
+      const response = await api.get('/jadwal-pelajaran-form-options');
       if (response.data.success) {
         setFormOptions(response.data.data);
         if (response.data.data?.default_tahun_ajaran) {
@@ -161,7 +161,7 @@ export default function JadwalPelajaranPage() {
           jam_ke: parseInt(cells[idx['jam_ke']]),
         };
         try {
-          const resp = await api.post('/v1/jadwal-pelajaran', payload);
+          const resp = await api.post('/jadwal-pelajaran', payload);
           if (resp.data.success) success++; else failed++;
         } catch {
           failed++;

@@ -53,7 +53,7 @@ export default function TambahPresensiHarianPage() {
 
   const fetchFormData = async () => {
     try {
-      const response = await api.get('/v1/presensi-harian-form-data');
+      const response = await api.get('/presensi-harian-form-data');
       if (response.data.success) {
         setSiswa(response.data.data.siswa);
         setStatusKehadiran(response.data.data.status_kehadiran);
@@ -99,7 +99,7 @@ export default function TambahPresensiHarianPage() {
 
     setLoading(true);
     try {
-      const response = await api.post('/v1/presensi-harian', formData);
+      const response = await api.post('/presensi-harian', formData);
       
       if (response.data.success) {
         alert('Data presensi harian berhasil ditambahkan!');

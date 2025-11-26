@@ -99,7 +99,7 @@ export default function EditKurikulumPage({ params }: EditKurikulumPageProps) {
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/kurikulum-form-data');
+      const response = await api.get('/kurikulum-form-data');
       if (response.data.success) {
         setFormOptions(prev => ({
           ...prev,

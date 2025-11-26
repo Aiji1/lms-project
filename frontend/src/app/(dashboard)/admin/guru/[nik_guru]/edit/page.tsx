@@ -128,7 +128,7 @@ export default function EditGuruPage() {
   useEffect(() => {
     const fetchFormData = async () => {
       try {
-        const response = await api.get('/v1/guru-form-data');
+        const response = await api.get('/guru-form-data');
         if (response.data.success) {
           setFormOptions(response.data.data);
         }

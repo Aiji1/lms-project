@@ -55,7 +55,7 @@ export default function KurikulumPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/v1/kurikulum', {
+      const response = await api.get('/kurikulum', {
         params: {
           page: currentPage,
           per_page: 10,
@@ -103,7 +103,7 @@ export default function KurikulumPage() {
   const handleDownloadTemplate = async () => {
     try {
       console.log('Starting template download...');
-      const response = await api.get('/v1/kurikulum/template', {
+      const response = await api.get('/kurikulum/template', {
         responseType: 'blob'
       });
       

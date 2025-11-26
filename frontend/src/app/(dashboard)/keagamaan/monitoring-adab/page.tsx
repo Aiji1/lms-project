@@ -392,7 +392,7 @@ export default function MonitoringAdabListPage() {
       } catch (err: any) {
         // Fallback: ambil semua siswa lalu filter berdasarkan id_kelas
         try {
-          const resp2 = await api.get('/v1/siswa', { params: { per_page: 1000 } });
+          const resp2 = await api.get('/siswa', { params: { per_page: 1000 } });
           const list = Array.isArray(resp2.data?.data?.data)
             ? resp2.data.data.data
             : (Array.isArray(resp2.data?.data) ? resp2.data.data : []);
@@ -837,7 +837,7 @@ export default function MonitoringAdabListPage() {
                       });
                     });
                     if (entries.length === 0) { showToast('Isi kuesioner terlebih dahulu', 'error'); return; }
-                    await api.post('/v1/adab-questionnaire-responses', {
+                    await api.post('/adab-questionnaire-responses', {
                       nis: studentInfo.nis,
                       tanggal: todayStr,
                       entries,

@@ -66,7 +66,7 @@ export default function TambahUserPage() {
   useEffect(() => {
     const fetchFormData = async () => {
       try {
-        const response = await api.get('/v1/users-form-data');
+        const response = await api.get('/users-form-data');
         if (response.data.success) {
           setFormOptions(response.data.data);
         }
@@ -193,7 +193,7 @@ export default function TambahUserPage() {
 
     setLoading(true);
     try {
-      const response = await api.post('/v1/users', formData);
+      const response = await api.post('/users', formData);
       
       if (response.data.success) {
         alert('User berhasil ditambahkan');

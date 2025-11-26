@@ -399,11 +399,11 @@ export default function HafalanPage() {
     try {
       setLoading(true);
       const [hafalanResponse, formDataResponse, targetResponse, evaluasiResponse, guruResponse] = await Promise.all([
-        api.get('/v1/hafalan'),
-        api.get('/v1/hafalan-form-data'),
-        api.get('/v1/target-hafalan-siswa', { params: { status: 'Aktif', per_page: 1000 }}),
-        api.get('/v1/evaluasi-hafalan', { params: { per_page: 1000 }}),
-        api.get('/v1/guru', { params: { per_page: 1000 }})
+        api.get('/hafalan'),
+        api.get('/hafalan-form-data'),
+        api.get('/target-hafalan-siswa', { params: { status: 'Aktif', per_page: 1000 }}),
+        api.get('/evaluasi-hafalan', { params: { per_page: 1000 }}),
+        api.get('/guru', { params: { per_page: 1000 }})
       ]);
 
       // Simpan daftar baris siswa hasil agregasi hafalan agar bisa digabung dengan form data
@@ -506,7 +506,7 @@ export default function HafalanPage() {
           }
         } catch {}
         try {
-          const fallbackRes = await api.get('/v1/siswa', { params: { per_page: 1000 } });
+          const fallbackRes = await api.get('/siswa', { params: { per_page: 1000 } });
           const raw = fallbackRes?.data?.data?.data || fallbackRes?.data?.data || [];
           siswaAktif = (raw || []).map((s: any) => ({
             nis: s.nis,
@@ -862,7 +862,7 @@ export default function HafalanPage() {
           alert(res.data?.message || 'Gagal memperbarui data hafalan.');
         }
       } else {
-        const res = await api.post('/v1/hafalan', payload);
+        const res = await api.post('/hafalan', payload);
         if (res.data?.success) {
           // Tandai sebagai tersimpan
           const newId = res.data?.data?.id_hafalan;
@@ -930,7 +930,7 @@ export default function HafalanPage() {
         catatan: '',
       };
       try {
-        const res = await api.post('/v1/hafalan', payload);
+        const res = await api.post('/hafalan', payload);
         if (res.data?.success) ok++; else fail++;
       } catch {
         fail++;

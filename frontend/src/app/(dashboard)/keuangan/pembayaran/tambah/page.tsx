@@ -54,7 +54,7 @@ export default function TambahPembayaranPage() {
     try {
       // Jenis pembayaran
       try {
-        const respJenis = await api.get('/v1/jenis-pembayaran-form-data');
+        const respJenis = await api.get('/jenis-pembayaran-form-data');
         const dataJenis = Array.isArray(respJenis.data?.data) ? respJenis.data.data : [];
         setJenisOptions(dataJenis);
       } catch (apiErr: any) {
@@ -67,7 +67,7 @@ export default function TambahPembayaranPage() {
 
       // Tagihan
       try {
-        const respTagihan = await api.get('/v1/tagihan-form-data');
+        const respTagihan = await api.get('/tagihan-form-data');
         const dataTagihan = Array.isArray(respTagihan.data?.data) ? respTagihan.data.data : [];
         setTagihanOptions(dataTagihan);
       } catch (apiErr: any) {
@@ -108,7 +108,7 @@ export default function TambahPembayaranPage() {
           tanggal_bayar: form.tanggal_bayar,
           metode: form.metode,
         };
-        const resp = await api.post('/v1/pembayaran', payload);
+        const resp = await api.post('/pembayaran', payload);
         if (resp.status >= 200 && resp.status < 300) {
           setSuccess('Pembayaran berhasil dibuat');
           setForm({ nis: '', nama: '', jenis_id: '', tagihan_id: '', nominal: '', tanggal_bayar: '', metode: 'Tunai' });

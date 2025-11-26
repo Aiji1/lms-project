@@ -137,7 +137,7 @@ export default function TambahTugasPage() {
       
       // Try to fetch from API first
       try {
-        const response = await api.get('/v1/tugas-form-data');
+        const response = await api.get('/tugas-form-data');
         console.log('Form options response:', response.data);
 
         if (response.data.success) {
@@ -276,7 +276,7 @@ export default function TambahTugasPage() {
       });
 
       console.log('Submitting tugas data...');
-      const response = await api.post('/v1/tugas', submitData, {
+      const response = await api.post('/tugas', submitData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

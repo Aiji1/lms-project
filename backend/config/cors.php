@@ -27,10 +27,10 @@ return [
         'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3003,http://127.0.0.1:3003'
     )))),
 
-    'allowed_origins_patterns' => [
-        '^https?://localhost(:[0-9]+)?$',
-        '^https?://127\.0\.0\.1(:[0-9]+)?$'
-    ],
+    // Gunakan delimiter regex yang benar agar preg_match tidak error
+    // Hilangkan pola regex untuk mencegah error preg_match tanpa delimiter.
+    // Dengan supports_credentials=true, gunakan daftar explicit di 'allowed_origins'.
+    'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
 

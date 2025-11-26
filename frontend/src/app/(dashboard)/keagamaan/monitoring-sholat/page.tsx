@@ -23,6 +23,8 @@ type DetailItem = {
   kelas: string;
   status_kehadiran: string;
   tanggal_monitoring: string | null;
+  // Opsional: jika API menyediakan jenis kelamin ('L' | 'P')
+  jenis_kelamin?: 'L' | 'P' | string;
 };
 
 type RowItem = {
@@ -33,6 +35,8 @@ type RowItem = {
   tanggal_dhuhur: string | null;
   status_asar: string | null;
   tanggal_asar: string | null;
+  // Opsional untuk pewarnaan baris berdasarkan jenis kelamin
+  jenis_kelamin?: 'L' | 'P' | string;
 };
 
 export default function MonitoringSholatPage() {
@@ -54,7 +58,9 @@ export default function MonitoringSholatPage() {
   const [details, setDetails] = useState<DetailItem[]>([]);
   const [detailsDhuhur, setDetailsDhuhur] = useState<DetailItem[]>([]);
   const [detailsAsar, setDetailsAsar] = useState<DetailItem[]>([]);
-  const [submittingInline, setSubmittingInline] = useState(false);
+  const [submittingDhuhur, setSubmittingDhuhur] = useState(false);
+  const [submittingAsar, setSubmittingAsar] = useState(false);
+  const [genderMap, setGenderMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const fetchFormData = async () => {
@@ -69,6 +75,25 @@ export default function MonitoringSholatPage() {
       }
     };
     fetchFormData();
+  }, []);
+
+  // Muat daftar siswa untuk mendapatkan jenis kelamin, gunakan sekali dan cache di state
+  useEffect(() => {
+    const fetchStudentsGender = async () => {
+      try {
+        const resp = await api.get('/siswa', { params: { per_page: 1000 } });
+        const raw = resp?.data?.data?.data || resp?.data?.data || [];
+        const map: Record<string, string> = {};
+        (raw || []).forEach((s: any) => {
+          if (s?.nis) {
+            const jk = s?.jenis_kelamin ?? s?.jk ?? s?.gender;
+            if (jk) map[String(s.nis)] = String(jk);
+          }
+        });
+        setGenderMap(map);
+      } catch {}
+    };
+    fetchStudentsGender();
   }, []);
 
   const refreshData = async () => {
@@ -158,36 +183,51 @@ export default function MonitoringSholatPage() {
     );
   };
 
-  const submitInline = async () => {
+  const submitDhuhurInline = async () => {
     try {
-      setSubmittingInline(true);
+      setSubmittingDhuhur(true);
       const entriesDh = detailsDhuhur
         .filter((d) => d.status_kehadiran === "Hadir" || d.status_kehadiran === "Tidak_Hadir")
         .map((d) => ({ nis: d.nis, status_kehadiran: d.status_kehadiran }));
+      if (entriesDh.length === 0) {
+        alert("Tidak ada perubahan ceklist Dzuhur untuk disimpan");
+        return;
+      }
+      await api.post("/v1/monitoring-sholat/submit", {
+        tanggal,
+        jenis_sholat: "Dhuhur",
+        entries: entriesDh,
+      });
+      alert("Berhasil menyimpan ceklist Dzuhur");
+      await refreshData();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Gagal menyimpan ceklist Dzuhur");
+    } finally {
+      setSubmittingDhuhur(false);
+    }
+  };
+
+  const submitAsarInline = async () => {
+    try {
+      setSubmittingAsar(true);
       const entriesAs = detailsAsar
         .filter((d) => d.status_kehadiran === "Hadir" || d.status_kehadiran === "Tidak_Hadir")
         .map((d) => ({ nis: d.nis, status_kehadiran: d.status_kehadiran }));
-
-      if (entriesDh.length > 0) {
-        await api.post("/v1/monitoring-sholat/submit", {
-          tanggal,
-          jenis_sholat: "Dhuhur",
-          entries: entriesDh,
-        });
+      if (entriesAs.length === 0) {
+        alert("Tidak ada perubahan ceklist Asar untuk disimpan");
+        return;
       }
-      if (entriesAs.length > 0) {
-        await api.post("/v1/monitoring-sholat/submit", {
-          tanggal,
-          jenis_sholat: "Asar",
-          entries: entriesAs,
-        });
-      }
-      alert("Berhasil menyimpan monitoring sholat");
+      await api.post("/v1/monitoring-sholat/submit", {
+        tanggal,
+        jenis_sholat: "Asar",
+        entries: entriesAs,
+      });
+      alert("Berhasil menyimpan ceklist Asar");
       await refreshData();
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Gagal menyimpan monitoring sholat");
+      alert(err?.response?.data?.message || "Gagal menyimpan ceklist Asar");
     } finally {
-      setSubmittingInline(false);
+      setSubmittingAsar(false);
     }
   };
 
@@ -250,6 +290,7 @@ export default function MonitoringSholatPage() {
           tanggal_dhuhur: null,
           status_asar: null,
           tanggal_asar: null,
+          jenis_kelamin: d.jenis_kelamin ?? genderMap[d.nis],
         };
         if (jenis === "Dhuhur") {
           cur.status_dhuhur = d.status_kehadiran || null;
@@ -269,7 +310,7 @@ export default function MonitoringSholatPage() {
       if (ka !== kb) return ka - kb;
       return a.nama_siswa.localeCompare(b.nama_siswa);
     });
-  }, [detailsDhuhur, detailsAsar]);
+  }, [detailsDhuhur, detailsAsar, genderMap]);
 
   const toggleDhuhur = (nis: string) => {
     setDetailsDhuhur((prev) =>
@@ -443,11 +484,18 @@ export default function MonitoringSholatPage() {
         <div className="p-3">
           <div className="flex items-center justify-end mb-3 gap-2">
             <button
-              onClick={submitInline}
+              onClick={submitDhuhurInline}
               className="px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-              disabled={submittingInline}
+              disabled={submittingDhuhur}
             >
-              {submittingInline ? "Menyimpan..." : "Simpan Ceklist"}
+              {submittingDhuhur ? "Menyimpan..." : "Simpan Dzuhur"}
+            </button>
+            <button
+              onClick={submitAsarInline}
+              className="px-3 py-2 bg-indigo-600 text-white rounded disabled:opacity-50"
+              disabled={submittingAsar}
+            >
+              {submittingAsar ? "Menyimpan..." : "Simpan Asar"}
             </button>
           </div>
           <table className="w-full text-sm">
@@ -461,10 +509,12 @@ export default function MonitoringSholatPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.nis} className="border-t">
+              {rows.map((r) => {
+                const nameBg = r.jenis_kelamin === 'P' ? 'bg-pink-50' : r.jenis_kelamin === 'L' ? 'bg-blue-50' : '';
+                return (
+                  <tr key={r.nis} className={`border-t`}>
                   <td className="p-2">{r.nis}</td>
-                  <td className="p-2">{r.nama_siswa}</td>
+                  <td className={`p-2 ${nameBg}`}>{r.nama_siswa}</td>
                   <td className="p-2">{r.kelas}</td>
                   <td className="p-2">
                     <label className="inline-flex items-center gap-2">
@@ -487,7 +537,8 @@ export default function MonitoringSholatPage() {
                     </label>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {rows.length === 0 && (
                 <tr>
                   <td className="p-2" colSpan={5}>

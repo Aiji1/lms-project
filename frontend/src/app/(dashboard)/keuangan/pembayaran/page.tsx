@@ -54,7 +54,7 @@ export default function PembayaranListPage() {
       setLoading(true);
       setError(null);
       try {
-        const resp = await api.get('/v1/pembayaran', { params: filters });
+        const resp = await api.get('/pembayaran', { params: filters });
         const data = Array.isArray(resp.data?.data) ? resp.data.data : [];
         setRows(data);
         return;

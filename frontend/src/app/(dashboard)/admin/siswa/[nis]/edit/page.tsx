@@ -107,7 +107,7 @@ export default function EditSiswaPage() {
 
   const fetchFormData = async () => {
     try {
-      const response = await api.get('/v1/siswa-form-data');
+      const response = await api.get('/siswa-form-data');
       if (response.data.success) {
         setKelas(response.data.data.kelas);
         setJurusan(response.data.data.jurusan);

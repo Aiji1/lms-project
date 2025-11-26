@@ -45,7 +45,7 @@ export default function TambahTagihanPage() {
     try {
       setError(null);
       try {
-        const respJenis = await api.get('/v1/jenis-pembayaran-form-data');
+        const respJenis = await api.get('/jenis-pembayaran-form-data');
         const jenis = Array.isArray(respJenis.data?.data) ? respJenis.data.data : (Array.isArray(respJenis.data?.data?.options) ? respJenis.data.data.options : []);
         setJenisOptions(jenis);
       } catch (e1: any) {
@@ -58,7 +58,7 @@ export default function TambahTagihanPage() {
       }
 
       try {
-        const respKelas = await api.get('/v1/kelas-form-data');
+        const respKelas = await api.get('/kelas-form-data');
         const raw = respKelas.data?.data;
         let options: any[] = [];
         if (Array.isArray(raw)) options = raw;
@@ -115,7 +115,7 @@ export default function TambahTagihanPage() {
     setError(null);
     try {
       try {
-        const resp = await api.post('/v1/tagihan', {
+        const resp = await api.post('/tagihan', {
           judul: form.judul,
           jenis_kode: form.jenis_kode,
           id_kelas: Number(form.id_kelas),

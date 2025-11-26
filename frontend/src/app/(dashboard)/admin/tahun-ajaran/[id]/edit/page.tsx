@@ -73,7 +73,7 @@ export default function EditTahunAjaranPage() {
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/tahun-ajaran-form-data');
+      const response = await api.get('/tahun-ajaran-form-data');
       if (response.data.success) {
         setFormOptions(response.data.data);
       }

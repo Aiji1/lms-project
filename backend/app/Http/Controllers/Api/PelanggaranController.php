@@ -15,13 +15,16 @@ class PelanggaranController extends Controller
     public function getFormData(Request $request)
     {
         try {
-            $jenisOptions = [
-                ['value' => 'Kaos_Kaki_Pendek', 'label' => 'Kaos Kaki Pendek'],
-                ['value' => 'Terlambat', 'label' => 'Terlambat'],
-                ['value' => 'Salah_Seragam', 'label' => 'Salah Seragam'],
-                ['value' => 'Salah_Sepatu', 'label' => 'Salah Sepatu'],
-                ['value' => 'Other', 'label' => 'Lainnya'],
-            ];
+            $jenisOptions = [];
+
+            $masterJenis = DB::table('jenis_pelanggaran')
+                ->where('status', 'Aktif')
+                ->orderBy('label')
+                ->get();
+            foreach ($masterJenis as $row) {
+                $jenisOptions[] = ['value' => $row->label, 'label' => $row->label];
+            }
+            $jenisOptions[] = ['value' => 'Other', 'label' => 'Lainnya'];
 
             $statusOptions = [
                 ['value' => 'Active', 'label' => 'Active'],
@@ -32,6 +35,9 @@ class PelanggaranController extends Controller
                 ->select('id_kelas', 'nama_kelas')
                 ->orderBy('nama_kelas')
                 ->get();
+
+            // Ambil jenis pelanggaran custom dari data yang sudah ada
+            // tidak menambahkan jenis dari data pelanggaran; hanya dari master + Other
 
             return response()->json([
                 'success' => true,
@@ -66,7 +72,6 @@ class PelanggaranController extends Controller
                     'kelas.nama_kelas',
                     'pelanggaran.tanggal_pelanggaran',
                     'pelanggaran.jenis_pelanggaran',
-                    'pelanggaran.deskripsi_custom',
                     'pelanggaran.deskripsi_pelanggaran',
                     'pelanggaran.poin_pelanggaran',
                     'pelanggaran.status'
@@ -122,9 +127,8 @@ class PelanggaranController extends Controller
         $validator = Validator::make($request->all(), [
             'nis' => 'required|exists:siswa,nis',
             'tanggal_pelanggaran' => 'required|date',
-            'jenis_pelanggaran' => 'required|in:Kaos_Kaki_Pendek,Terlambat,Salah_Seragam,Salah_Sepatu,Other',
+            'jenis_pelanggaran' => 'required|string|max:200',
             'deskripsi_pelanggaran' => 'required|string',
-            'deskripsi_custom' => 'nullable|string|max:200',
             'poin_pelanggaran' => 'required|integer|min:0',
             'status' => 'nullable|in:Active,Resolved'
         ]);
@@ -144,7 +148,7 @@ class PelanggaranController extends Controller
             }
 
             // Hanya Guru yang dapat input sesuai schema nik_guru_input FK
-            if ($user->user_type !== 'Guru' || empty($user->reference_id')) {
+            if ($user->user_type !== 'Guru' || empty($user->reference_id)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Hanya guru yang dapat menginput pelanggaran'
@@ -164,7 +168,6 @@ class PelanggaranController extends Controller
                 'nis' => $request->nis,
                 'tanggal_pelanggaran' => $request->tanggal_pelanggaran,
                 'jenis_pelanggaran' => $request->jenis_pelanggaran,
-                'deskripsi_custom' => $request->deskripsi_custom,
                 'deskripsi_pelanggaran' => $request->deskripsi_pelanggaran,
                 'poin_pelanggaran' => $request->poin_pelanggaran,
                 'status' => $request->status ?? 'Active',
@@ -225,9 +228,8 @@ class PelanggaranController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'tanggal_pelanggaran' => 'sometimes|date',
-            'jenis_pelanggaran' => 'sometimes|in:Kaos_Kaki_Pendek,Terlambat,Salah_Seragam,Salah_Sepatu,Other',
+            'jenis_pelanggaran' => 'sometimes|string|max:200',
             'deskripsi_pelanggaran' => 'sometimes|string',
-            'deskripsi_custom' => 'nullable|string|max:200',
             'poin_pelanggaran' => 'sometimes|integer|min:0',
             'status' => 'sometimes|in:Active,Resolved'
         ]);
@@ -247,7 +249,7 @@ class PelanggaranController extends Controller
             }
 
             $updateData = [];
-            foreach (['tanggal_pelanggaran','jenis_pelanggaran','deskripsi_pelanggaran','deskripsi_custom','poin_pelanggaran','status'] as $field) {
+            foreach (['tanggal_pelanggaran','jenis_pelanggaran','deskripsi_pelanggaran','poin_pelanggaran','status'] as $field) {
                 if ($request->has($field)) {
                     $updateData[$field] = $request->get($field);
                 }

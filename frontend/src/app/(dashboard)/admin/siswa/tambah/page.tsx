@@ -76,7 +76,7 @@ export default function TambahSiswaPage() {
 
   const fetchFormData = async () => {
     try {
-      const response = await api.get('/v1/siswa-form-data');
+      const response = await api.get('/siswa-form-data');
       if (response.data.success) {
         setKelas(response.data.data.kelas);
         setJurusan(response.data.data.jurusan);
@@ -160,7 +160,7 @@ export default function TambahSiswaPage() {
         golongan_darah: formData.golongan_darah || null
       };
 
-      const response = await api.post('/v1/siswa', submitData);
+      const response = await api.post('/siswa', submitData);
       
       if (response.data.success) {
         let userCreationMessage = '';
@@ -175,7 +175,7 @@ export default function TambahSiswaPage() {
               reference_id: formData.nis,
               status: userAccount.status
             };
-            const userRes = await api.post('/v1/users', userPayload);
+            const userRes = await api.post('/users', userPayload);
             if (userRes.data?.success) {
               userCreationMessage = '\nAkun user siswa berhasil dibuat.';
             }

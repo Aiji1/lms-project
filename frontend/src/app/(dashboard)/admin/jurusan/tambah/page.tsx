@@ -37,7 +37,7 @@ export default function TambahJurusanPage() {
 
   const fetchFormOptions = async () => {
     try {
-      const response = await api.get('/v1/jurusan-form-data');
+      const response = await api.get('/jurusan-form-data');
       if (response.data.success) {
         setFormOptions(response.data.data);
       }
@@ -68,7 +68,7 @@ export default function TambahJurusanPage() {
     setFormErrors({});
 
     try {
-      const response = await api.post('/v1/jurusan', formData);
+      const response = await api.post('/jurusan', formData);
       
       if (response.data.success) {
         alert('Jurusan berhasil ditambahkan!');

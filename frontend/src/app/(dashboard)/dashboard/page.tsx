@@ -90,7 +90,7 @@ export default function DashboardPage() {
         return;
       }
 
-      const response = await api.get('/v1/dashboard/stats');
+      const response = await api.get('/dashboard/stats');
       
       if (response.data.success) {
         setStats(response.data.data.stats);

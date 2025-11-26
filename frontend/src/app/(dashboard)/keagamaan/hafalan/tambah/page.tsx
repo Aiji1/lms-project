@@ -71,7 +71,7 @@ export default function TambahHafalanPage() {
 
   const fetchFormData = async () => {
     try {
-      const response = await api.get('/v1/hafalan-form-data');
+      const response = await api.get('/hafalan-form-data');
       if (response.data.success) {
         setSiswa(response.data.data.siswa || []);
         setGuru(response.data.data.guru || []);
@@ -81,7 +81,7 @@ export default function TambahHafalanPage() {
     }
 
     try {
-      const targetResponse = await api.get('/v1/target-hafalan-siswa', { params: { status: 'Aktif', per_page: 1000 }});
+      const targetResponse = await api.get('/target-hafalan-siswa', { params: { status: 'Aktif', per_page: 1000 }});
       if (targetResponse.data.success) {
         const list = targetResponse.data.data.data || [];
         const map: Record<string, TargetHalaqoh> = {};
@@ -164,7 +164,7 @@ export default function TambahHafalanPage() {
 
     setLoading(true);
     try {
-      const response = await api.post('/v1/hafalan', formData);
+      const response = await api.post('/hafalan', formData);
       
       if (response.data.success) {
         router.push('/keagamaan/hafalan');

@@ -45,7 +45,7 @@ export default function TahunAjaranPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/v1/tahun-ajaran', {
+      const response = await api.get('/tahun-ajaran', {
         params: {
           page: currentPage,
           per_page: 10,
@@ -89,7 +89,7 @@ export default function TahunAjaranPage() {
 
   const handleDownloadTemplate = async () => {
     try {
-      const response = await api.get('/v1/tahun-ajaran/template', {
+      const response = await api.get('/tahun-ajaran/template', {
         responseType: 'blob'
       });
       
@@ -121,7 +121,7 @@ export default function TahunAjaranPage() {
       const formData = new FormData();
       formData.append('file', importFile);
 
-      const response = await api.post('/v1/tahun-ajaran/import', formData, {
+      const response = await api.post('/tahun-ajaran/import', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

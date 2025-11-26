@@ -16,8 +16,8 @@ import {
 import { api } from '@/lib/api';
 import ImportModal from '@/components/forms/ImportModal';
 import { useAuth } from '@/hooks/useAuth';
-import { getUserPermission, createPermissionForRoles } from '@/lib/permissions';
-import { FULL_PERMISSIONS, READ_ONLY_PERMISSIONS, DEFAULT_PERMISSIONS, UserRole } from '@/types/permissions';
+import { useRouteProtection } from '@/hooks/useRouteProtection';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Siswa {
   nis: string;
@@ -44,20 +44,16 @@ interface ApiResponse {
 }
 
 export default function DataSiswaPage() {
+  // Route protection - redirect if no view permission
+  const { isAuthorized, loading: permLoading } = useRouteProtection({
+    resourceKey: 'manajemen_data.data_siswa',
+    redirectTo: '/dashboard'
+  });
+
   const { user } = useAuth();
   
-  // Permission configuration for Data Siswa
-  const dataSiswaPermissions = createPermissionForRoles({
-    'Admin': FULL_PERMISSIONS,
-    'Kepala_Sekolah': READ_ONLY_PERMISSIONS,
-    'Guru': READ_ONLY_PERMISSIONS,
-    'Siswa': DEFAULT_PERMISSIONS,
-    'Petugas_Keuangan': DEFAULT_PERMISSIONS,
-    'Orang_Tua': DEFAULT_PERMISSIONS
-  });
-  
-  // Get user permissions
-  const userPermissions = getUserPermission(user?.user_type as UserRole || 'Siswa', dataSiswaPermissions);
+  // Get permissions from centralized system
+  const { canCreate, canEdit, canDelete } = usePermission('manajemen_data.data_siswa');
 
   const [siswa, setSiswa] = useState<Siswa[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,8 +83,8 @@ export default function DataSiswaPage() {
           page,
           per_page: perPage,
           search: searchTerm,
-          kelas: kelasId,
-          jurusan: jurusanId
+          kelas: kelasId || undefined,
+          jurusan: jurusanId || undefined
         }
       });
 
@@ -108,16 +104,12 @@ export default function DataSiswaPage() {
   // Fetch dropdown options
   const fetchDropdownOptions = async () => {
     try {
-      // Fetch all kelas options (without pagination)
-      const kelasResponse = await api.get('/v1/kelas?per_page=100');
-      console.log('Kelas Response:', kelasResponse.data);
+      const kelasResponse = await api.get('/kelas?per_page=100');
       if (kelasResponse.data.success) {
         setKelasOptions(kelasResponse.data.data);
       }
 
-      // Fetch jurusan options
-      const jurusanResponse = await api.get('/v1/jurusan');
-      console.log('Jurusan Response:', jurusanResponse.data);
+      const jurusanResponse = await api.get('/jurusan');
       if (jurusanResponse.data.success) {
         setJurusanOptions(jurusanResponse.data.data);
       }
@@ -129,7 +121,7 @@ export default function DataSiswaPage() {
   useEffect(() => {
     fetchSiswa(currentPage, search, kelasFilter, jurusanFilter);
     fetchDropdownOptions();
-  }, [currentPage]);
+  }, [currentPage, kelasFilter, jurusanFilter]);
 
   // Handle search
   const handleSearch = (e: React.FormEvent) => {
@@ -138,10 +130,8 @@ export default function DataSiswaPage() {
     fetchSiswa(1, search, kelasFilter, jurusanFilter);
   };
 
-  // Handle filter change
   const handleFilterChange = () => {
     setCurrentPage(1);
-    fetchSiswa(1, search, kelasFilter, jurusanFilter);
   };
 
   // Handle single delete
@@ -153,7 +143,6 @@ export default function DataSiswaPage() {
       if (response.data.success) {
         alert('Data siswa berhasil dihapus');
         fetchSiswa(currentPage, search, kelasFilter, jurusanFilter);
-        // Remove from selected if it was selected
         setSelectedStudents(prev => prev.filter(id => id !== nis));
       }
     } catch (error) {
@@ -172,7 +161,7 @@ export default function DataSiswaPage() {
     if (!confirm(`Apakah Anda yakin ingin menghapus ${selectedStudents.length} data siswa yang dipilih?`)) return;
 
     try {
-      const response = await api.post('/v1/siswa/bulk-delete', {
+      const response = await api.post('/siswa/bulk-delete', {
         nis_list: selectedStudents
       });
       
@@ -195,7 +184,7 @@ export default function DataSiswaPage() {
 
     setBulkBarcodeLoading(true);
     try {
-      const response = await api.post('/v1/siswa/bulk-generate-barcodes');
+      const response = await api.post('/siswa/bulk-generate-barcodes');
       if (response.data.success) {
         alert(`Berhasil generate ${response.data.generated_count} barcode untuk siswa`);
         fetchSiswa(currentPage, search, kelasFilter, jurusanFilter);
@@ -228,7 +217,6 @@ export default function DataSiswaPage() {
     }
   };
 
-  // Update selectAll when individual selections change
   useEffect(() => {
     if (selectedStudents.length === siswa.length && siswa.length > 0) {
       setSelectAll(true);
@@ -272,6 +260,23 @@ export default function DataSiswaPage() {
     return pages;
   };
 
+  // Show loading while checking permission
+  if (permLoading || isAuthorized === null) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If not authorized, return null (will redirect)
+  if (!isAuthorized) {
+    return null;
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -284,7 +289,7 @@ export default function DataSiswaPage() {
             </p>
           </div>
           <div className="mt-4 md:mt-0 flex space-x-3">
-            {userPermissions.create && (
+            {canCreate && (
               <>
                 <button 
                   onClick={() => setShowImportModal(true)}
@@ -392,7 +397,7 @@ export default function DataSiswaPage() {
             <h2 className="text-lg font-semibold text-gray-900">
               Daftar Siswa ({totalData} data)
             </h2>
-            {selectedStudents.length > 0 && userPermissions.delete && (
+            {selectedStudents.length > 0 && canDelete && (
               <div className="flex space-x-2">
                 <button
                   onClick={handleBulkGenerateBarcode}
@@ -425,7 +430,7 @@ export default function DataSiswaPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    {userPermissions.delete && (
+                    {canDelete && (
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         <input
                           type="checkbox"
@@ -462,7 +467,7 @@ export default function DataSiswaPage() {
                   {siswa.length > 0 ? (
                     siswa.map((item) => (
                       <tr key={item.nis} className="hover:bg-gray-50">
-                        {userPermissions.delete && (
+                        {canDelete && (
                           <td className="px-6 py-4 whitespace-nowrap">
                             <input
                               type="checkbox"
@@ -514,7 +519,7 @@ export default function DataSiswaPage() {
                             >
                               <Eye size={16} />
                             </Link>
-                            {userPermissions.edit && (
+                            {canEdit && (
                               <Link
                                 href={`/admin/siswa/${item.nis}/edit`}
                                 className="text-yellow-600 hover:text-yellow-900"
@@ -523,7 +528,7 @@ export default function DataSiswaPage() {
                                 <Edit size={16} />
                               </Link>
                             )}
-                            {userPermissions.delete && (
+                            {canDelete && (
                               <button
                                 onClick={() => handleDelete(item.nis)}
                                 className="text-red-600 hover:text-red-900"
@@ -538,7 +543,7 @@ export default function DataSiswaPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={userPermissions.delete ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan={canDelete ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
                         {search ? 'Tidak ada data yang ditemukan' : 'Belum ada data siswa'}
                       </td>
                     </tr>
@@ -613,7 +618,7 @@ export default function DataSiswaPage() {
       )}
 
       {/* Import Modal */}
-      {userPermissions.create && (
+      {canCreate && (
         <ImportModal
           isOpen={showImportModal}
           onClose={() => setShowImportModal(false)}

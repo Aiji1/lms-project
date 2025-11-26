@@ -58,13 +58,13 @@ export default function TambahJurnalMengajarPage() {
   const fetchFormData = async () => {
     try {
       // Fetch jadwal options
-      const jadwalResponse = await api.get('/v1/jurnal-mengajar-form-data');
+      const jadwalResponse = await api.get('/jurnal-mengajar-form-data');
       if (jadwalResponse.data.success) {
         setJadwalOptions(jadwalResponse.data.data.jadwal_pelajaran || []);
       }
 
       // Fetch tahun ajaran options
-      const tahunAjaranResponse = await api.get('/v1/tahun-ajaran-form-data');
+      const tahunAjaranResponse = await api.get('/tahun-ajaran-form-data');
       if (tahunAjaranResponse.data.success) {
         setTahunAjaranOptions(tahunAjaranResponse.data.data.tahun_ajaran || []);
       }
@@ -119,7 +119,7 @@ export default function TambahJurnalMengajarPage() {
 
     setLoading(true);
     try {
-      const response = await api.post('/v1/jurnal-mengajar', {
+      const response = await api.post('/jurnal-mengajar', {
         ...formData,
         id_jadwal: parseInt(formData.id_jadwal)
       });

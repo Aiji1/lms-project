@@ -65,7 +65,7 @@ export default function TambahKurikulumPage() {
   const fetchFormOptions = async () => {
     try {
       setOptionsLoading(true);
-      const response = await api.get('/v1/kurikulum-form-data');
+      const response = await api.get('/kurikulum-form-data');
       if (response.data.success) {
         setFormOptions(prev => ({
           ...prev,
@@ -110,7 +110,7 @@ export default function TambahKurikulumPage() {
         sks_jam_perminggu: formData.sks_jam_perminggu ? parseInt(formData.sks_jam_perminggu) : null
       };
 
-      const response = await api.post('/v1/kurikulum', submitData);
+      const response = await api.post('/kurikulum', submitData);
       
       if (response.data.success) {
         alert('Kurikulum berhasil ditambahkan!');

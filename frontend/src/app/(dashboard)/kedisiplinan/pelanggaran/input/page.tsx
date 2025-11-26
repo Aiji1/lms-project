@@ -18,15 +18,24 @@ export default function InputPelanggaranPage() {
   const [jenisOptions, setJenisOptions] = useState<Option[]>([]);
   const [statusOptions, setStatusOptions] = useState<Option[]>([]);
   const [siswaOptions, setSiswaOptions] = useState<SiswaOption[]>([]);
+  const [showJenisModal, setShowJenisModal] = useState(false);
+  const [newJenisName, setNewJenisName] = useState('');
 
   const [selectedKelas, setSelectedKelas] = useState<string>('');
 
+  const todayLocal = () => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const [form, setForm] = useState({
     nis: '',
-    tanggal_pelanggaran: new Date().toISOString().slice(0, 10),
+    tanggal_pelanggaran: todayLocal(),
     jenis_pelanggaran: '',
     deskripsi_pelanggaran: '',
-    deskripsi_custom: '',
     poin_pelanggaran: '',
     status: 'Active'
   });
@@ -36,11 +45,21 @@ export default function InputPelanggaranPage() {
   const fetchFormData = async () => {
     try {
       setError(null);
-      const resp = await api.get('/v1/pelanggaran-form-data');
+      const resp = await api.get('/pelanggaran-form-data');
       const data = resp.data?.data || {};
       const kelas = Array.isArray(data.kelas) ? data.kelas : (Array.isArray(data.kelas_options) ? data.kelas_options : []);
       setKelasOptions(kelas);
-      setJenisOptions(Array.isArray(data.jenis_pelanggaran_options) ? data.jenis_pelanggaran_options : []);
+      let baseJenis = Array.isArray(data.jenis_pelanggaran_options) ? data.jenis_pelanggaran_options : [];
+      try {
+        const hiddenRaw = localStorage.getItem('jenis_override_hidden');
+        const hidden: string[] = hiddenRaw ? JSON.parse(hiddenRaw) : [];
+        const labelsRaw = localStorage.getItem('jenis_override_labels');
+        const labels: Record<string, string> = labelsRaw ? JSON.parse(labelsRaw) : {};
+        baseJenis = baseJenis
+          .filter((o: Option) => !hidden.includes(o.value))
+          .map((o: Option) => ({ ...o, label: labels[o.value] ?? o.label }));
+      } catch {}
+      setJenisOptions(baseJenis);
       setStatusOptions(Array.isArray(data.status_options) ? data.status_options : []);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Gagal memuat form data');
@@ -58,7 +77,7 @@ export default function InputPelanggaranPage() {
     } catch (err: any) {
       // fallback: try siswa-form-data and filter client-side if structure fits
       try {
-        const resp2 = await api.get('/v1/siswa');
+        const resp2 = await api.get('/siswa');
         const list = Array.isArray(resp2.data?.data) ? resp2.data.data : [];
         const filtered = list.filter((s: any) => String(s.id_kelas) === String(kelasId))
           .map((s: any) => ({ nis: s.nis, nama_lengkap: s.nama_lengkap }));
@@ -73,7 +92,15 @@ export default function InputPelanggaranPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    if (name === 'jenis_pelanggaran') {
+      if (value === 'Other') {
+        setForm(prev => ({ ...prev, jenis_pelanggaran: 'Other' }));
+      } else {
+        setForm(prev => ({ ...prev, jenis_pelanggaran: value }));
+      }
+    } else {
+      setForm(prev => ({ ...prev, [name]: value }));
+    }
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
@@ -88,7 +115,7 @@ export default function InputPelanggaranPage() {
     if (!form.nis) nextErrors.nis = 'NIS wajib diisi';
     if (!form.tanggal_pelanggaran) nextErrors.tanggal_pelanggaran = 'Tanggal wajib diisi';
     if (!form.jenis_pelanggaran) nextErrors.jenis_pelanggaran = 'Jenis wajib dipilih';
-    if (!form.deskripsi_pelanggaran && !form.deskripsi_custom) nextErrors.deskripsi_pelanggaran = 'Deskripsi wajib diisi (atau custom)';
+    if (!form.deskripsi_pelanggaran) nextErrors.deskripsi_pelanggaran = 'Deskripsi wajib diisi';
     if (!form.poin_pelanggaran) nextErrors.poin_pelanggaran = 'Poin wajib diisi';
     if (!form.status) nextErrors.status = 'Status wajib dipilih';
     setErrors(nextErrors);
@@ -106,11 +133,10 @@ export default function InputPelanggaranPage() {
         tanggal_pelanggaran: form.tanggal_pelanggaran,
         jenis_pelanggaran: form.jenis_pelanggaran,
         deskripsi_pelanggaran: form.deskripsi_pelanggaran,
-        deskripsi_custom: form.deskripsi_custom || undefined,
         poin_pelanggaran: Number(form.poin_pelanggaran),
         status: form.status
       };
-      const resp = await api.post('/v1/pelanggaran', payload);
+      const resp = await api.post('/pelanggaran', payload);
       setSuccess('Pelanggaran berhasil disimpan');
       setTimeout(() => router.push('/kedisiplinan/pelanggaran'), 800);
     } catch (err: any) {
@@ -125,7 +151,12 @@ export default function InputPelanggaranPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-semibold">Input Pelanggaran</h1>
-        <a href="/kedisiplinan/pelanggaran" className="px-4 py-2 bg-slate-200 text-slate-800 rounded-md">Kembali</a>
+        <div className="flex gap-2">
+          <button onClick={() => setShowJenisModal(true)} className="px-4 py-2 bg-slate-200 text-slate-800 rounded-md">
+            <span className="mr-1">+</span> Jenis Pelanggaran
+          </button>
+          <a href="/kedisiplinan/pelanggaran" className="px-4 py-2 bg-slate-200 text-slate-800 rounded-md">Kembali</a>
+        </div>
       </div>
 
       <div className="bg-white p-4 rounded-md shadow-sm">
@@ -163,10 +194,7 @@ export default function InputPelanggaranPage() {
             <textarea name="deskripsi_pelanggaran" value={form.deskripsi_pelanggaran} onChange={handleChange} rows={3} className="w-full border rounded px-2 py-2" />
             {errors.deskripsi_pelanggaran && <p className="text-sm text-red-600 mt-1">{errors.deskripsi_pelanggaran}</p>}
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm text-gray-600 mb-1">Deskripsi Custom (opsional)</label>
-            <textarea name="deskripsi_custom" value={form.deskripsi_custom} onChange={handleChange} rows={3} className="w-full border rounded px-2 py-2" />
-          </div>
+          
           <div>
             <label className="block text-sm text-gray-600 mb-1">Poin Pelanggaran</label>
             <input type="number" name="poin_pelanggaran" value={form.poin_pelanggaran} onChange={handleChange} className="w-full border rounded px-2 py-2" />
@@ -190,6 +218,43 @@ export default function InputPelanggaranPage() {
         {error && <div className="mt-4 bg-red-50 text-red-700 border border-red-200 rounded p-3 text-sm">{error}</div>}
         {success && <div className="mt-4 bg-green-50 text-green-700 border border-green-200 rounded p-3 text-sm">{success}</div>}
       </div>
+
+      {/* Modal tambah jenis pelanggaran */}
+      {showJenisModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-md p-4 w-full max-w-md shadow">
+            <h2 className="text-lg font-semibold mb-2">Tambah Jenis Pelanggaran</h2>
+            <p className="text-sm text-gray-600 mb-3">Jenis baru akan tersimpan sebagai default dan muncul di semua perangkat.</p>
+            <input
+              type="text"
+              value={newJenisName}
+              onChange={(e) => setNewJenisName(e.target.value)}
+              placeholder="Nama jenis pelanggaran"
+              className="w-full border rounded px-3 py-2 mb-3"
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowJenisModal(false)} className="px-3 py-2 rounded bg-slate-200 text-slate-800">Batal</button>
+              <button
+                onClick={() => {
+                  const name = newJenisName.trim();
+                  if (!name) return;
+                  const doSave = async () => {
+                    try {
+                      await api.post('/jenis-pelanggaran', { label: name });
+                      await fetchFormData();
+                      setForm(prev => ({ ...prev, jenis_pelanggaran: name }));
+                      setNewJenisName('');
+                      setShowJenisModal(false);
+                    } catch {}
+                  };
+                  doSave();
+                }}
+                className="px-3 py-2 rounded bg-blue-600 text-white"
+              >Simpan</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -108,7 +108,7 @@ export default function EditJurnalMengajarPage() {
 
   const fetchJadwalOptions = async () => {
     try {
-      const response = await api.get('/v1/jurnal-mengajar-form-data');
+      const response = await api.get('/jurnal-mengajar-form-data');
       if (response.data.success) {
         setJadwalOptions(response.data.data.jadwal_pelajaran || []);
       }

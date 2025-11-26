@@ -83,7 +83,7 @@ export default function EditPresensiHarianPage() {
 
   const fetchFormData = async () => {
     try {
-      const response = await api.get('/v1/presensi-harian-form-data');
+      const response = await api.get('/presensi-harian-form-data');
       if (response.data.success) {
         setSiswa(response.data.data.siswa);
         setStatusKehadiran(response.data.data.status_kehadiran);
