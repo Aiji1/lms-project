@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  X
 } from 'lucide-react';
 
 // Import permission system
@@ -17,9 +18,10 @@ import { universalMenuConfig } from '@/config/menuConfig';
 interface SidebarProps {
   userType: UserRole;
   isCollapsed?: boolean;
+  onCloseMobile?: () => void;
 }
 
-export default function Sidebar({ userType, isCollapsed = false }: SidebarProps) {
+export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [user, setUser] = useState<{ role?: string; name?: string; nama_lengkap?: string; username?: string } | null>(null);
@@ -151,6 +153,13 @@ export default function Sidebar({ userType, isCollapsed = false }: SidebarProps)
     );
   }, []);
 
+  // Handle menu item click for mobile
+  const handleMenuClick = () => {
+    if (window.innerWidth < 1024 && onCloseMobile) {
+      onCloseMobile();
+    }
+  };
+
   const renderMenuItem = (item: MenuItem, level: number = 0) => {
     // Effective permissions for this item
     const effectivePermissions = item.resourceKey
@@ -161,54 +170,20 @@ export default function Sidebar({ userType, isCollapsed = false }: SidebarProps)
     const isExpanded = expandedItems.includes(item.label);
     const isActive = item.href ? (pathname === item.href || pathname.startsWith(item.href + '/')) : false;
 
-    // Filter children based on user permissions - FIXED
+    // Filter children based on user permissions
     const visibleChildren = hasChildren
       ? item.children!.filter(child => {
           const childPerms = child.resourceKey
             ? mergeItemPermissions(child.permissions, overrideMap, child.resourceKey)
             : child.permissions;
           
-          // Get permission for current user's role using helper function
           const userPerm = getUserPermission(userType, childPerms);
-          const canView = userPerm.view;
-          
-          // 🔍 DEBUG LOG UNTUK DATA USER
-          if (child.label === 'Data User') {
-            console.log('=== DEBUG DATA USER FILTER ===');
-            console.log('1. resourceKey:', child.resourceKey);
-            console.log('2. overrideMap:', overrideMap);
-            console.log('3. override for this key:', overrideMap[child.resourceKey || '']);
-            console.log('4. child.permissions (default):', child.permissions);
-            console.log('5. childPerms (after merge):', childPerms);
-            console.log('6. childPerms.Guru:', childPerms['Guru']);
-            console.log('7. userType:', userType);
-            console.log('8. userPerm:', userPerm);
-            console.log('9. canView result:', canView);
-          }
-          
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`Child ${child.label} (${child.resourceKey}):`, 
-              'canView:', canView,
-              'userType:', userType,
-              'userPermission:', userPerm
-            );
-          }
-          
-          return canView;
+          return userPerm.view;
         })
       : [];
 
     const hasVisibleChildren = visibleChildren.length > 0;
     const parentViewable = canViewMenuItem(userType, effectivePermissions);
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`Menu ${item.label} (${item.resourceKey}):`, 
-        'parentViewable:', parentViewable,
-        'hasChildren:', hasChildren,
-        'hasVisibleChildren:', hasVisibleChildren,
-        'visibleChildrenCount:', visibleChildren.length
-      );
-    }
 
     // Decision logic for rendering
     if (!hasChildren && !parentViewable) {
@@ -232,6 +207,7 @@ export default function Sidebar({ userType, isCollapsed = false }: SidebarProps)
         {shouldRenderLink ? (
           <Link
             href={item.href!}
+            onClick={handleMenuClick}
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg mb-1 transition-colors ${
               isActive 
                 ? 'bg-blue-600 text-white' 
@@ -309,15 +285,27 @@ export default function Sidebar({ userType, isCollapsed = false }: SidebarProps)
     } h-screen flex flex-col`}>
       {/* Logo - Fixed at top */}
       <div className="p-4 border-b border-gray-800 flex-shrink-0">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">LMS</span>
-          </div>
-          {!isCollapsed && (
-            <div>
-              <h1 className="font-bold text-lg">SMA Al-Azhar 7</h1>
-              <p className="text-xs text-slate-400">Learning Management System</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-bold text-sm">LMS</span>
             </div>
+            {!isCollapsed && (
+              <div>
+                <h1 className="font-bold text-lg">SMA Al-Azhar 7</h1>
+                <p className="text-xs text-slate-400">Learning Management System</p>
+              </div>
+            )}
+          </div>
+          
+          {/* Close button for mobile */}
+          {!isCollapsed && (
+            <button
+              onClick={onCloseMobile}
+              className="lg:hidden p-1 rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              <X size={20} className="text-gray-400" />
+            </button>
           )}
         </div>
       </div>
@@ -332,7 +320,7 @@ export default function Sidebar({ userType, isCollapsed = false }: SidebarProps)
         <div className="mt-auto p-4 flex-shrink-0 border-t border-gray-800">
           <div className="bg-gray-800 rounded-lg p-3">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center flex-shrink-0">
                 <span className="text-xs font-medium">
                   {user?.nama_lengkap ? user.nama_lengkap.charAt(0).toUpperCase() : 'U'}
                 </span>
