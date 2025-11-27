@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
+import { fetchMergedOverrides } from '@/lib/permissionOverrides';
 
 export interface Permission {
   view: boolean;
@@ -30,26 +30,23 @@ export function usePermission(resourceKey: string) {
         const role = user.user_type;
         const userId = user.user_id || user.username || user.reference_id;
 
-        // Call API to check permission dengan timestamp untuk prevent cache
-        const response = await api.post(`/permission-overrides/check?t=${Date.now()}`, {
-          role,
-          resource_key: resourceKey,
-          user_id: userId,
-        });
-
-        if (response.data.success) {
-          if (response.data.data) {
-            // Ada override dari database
-            setPermission(response.data.data);
-          } else {
-            // No override - use default based on role
-            const defaultPerms = getDefaultPermission(role, resourceKey);
-            setPermission(defaultPerms);
-          }
+        // Use cached fetchMergedOverrides instead of direct API call
+        const overrideMap = await fetchMergedOverrides({ role, user_id: userId });
+        
+        // Check if there's an override for this resource
+        const override = overrideMap[resourceKey];
+        
+        if (override) {
+          // Use override from database
+          setPermission(override);
+        } else {
+          // No override - use default based on role
+          const defaultPerms = getDefaultPermission(role, resourceKey);
+          setPermission(defaultPerms);
         }
       } catch (error) {
         console.error('Failed to load permission:', error);
-        // ✅ Default to NO ACCESS on error for security
+        // Default to NO ACCESS on error for security
         setPermission({ view: false, create: false, edit: false, delete: false });
       } finally {
         setLoading(false);
@@ -83,75 +80,41 @@ export function usePermission(resourceKey: string) {
 
 // Helper: Default permissions berdasarkan role
 function getDefaultPermission(role: string, resourceKey: string): Permission {
-  // ========================================
   // ADMIN - FULL ACCESS TO EVERYTHING
-  // ========================================
   if (role === 'Admin') {
     return { view: true, create: true, edit: true, delete: true };
   }
 
-  // ========================================
   // KEPALA SEKOLAH
-  // ========================================
   if (role === 'Kepala_Sekolah') {
-    // Full access
-    if (
-      resourceKey === 'pengumuman' ||
-      resourceKey === 'dashboard'
-    ) {
+    if (resourceKey === 'pengumuman' || resourceKey === 'dashboard') {
       return { view: true, create: true, edit: true, delete: true };
     }
     
-    // Read-only access to most data
     if (
       resourceKey === 'manajemen_data.data_siswa' ||
       resourceKey === 'manajemen_data.data_guru' ||
-      resourceKey === 'data_master.tahun_ajaran' ||
-      resourceKey === 'data_master.jurusan' ||
-      resourceKey === 'data_master.kelas' ||
-      resourceKey === 'data_master.mata_pelajaran' ||
-      resourceKey === 'data_master.kurikulum' ||
-      resourceKey === 'pembelajaran.jadwal_pelajaran' ||
-      resourceKey === 'pembelajaran.jurnal_mengajar' ||
-      resourceKey === 'pembelajaran.presensi_harian' ||
-      resourceKey === 'pembelajaran.presensi_mapel' ||
-      resourceKey === 'pembelajaran.nilai_siswa' ||
-      resourceKey === 'pembelajaran.tugas' ||
-      resourceKey === 'pembelajaran.modul_ajar' ||
-      resourceKey === 'keagamaan.monitoring_adab' ||
-      resourceKey === 'keagamaan.monitoring_sholat' ||
-      resourceKey === 'keagamaan.hafalan' ||
-      resourceKey === 'kedisiplinan.pelanggaran' ||
-      resourceKey === 'tagihan' ||
-      resourceKey === 'keuangan.pembayaran' ||
-      resourceKey === 'keuangan.jenis_pembayaran' ||
-      resourceKey === 'rapot.rapot_akademik' ||
-      resourceKey === 'rapot.att' ||
-      resourceKey === 'laporan.presensi' ||
-      resourceKey === 'laporan.tahfidz' ||
-      resourceKey === 'laporan.statistik'
+      resourceKey.startsWith('data_master.') ||
+      resourceKey.startsWith('pembelajaran.') ||
+      resourceKey.startsWith('keagamaan.') ||
+      resourceKey.startsWith('kedisiplinan.') ||
+      resourceKey.startsWith('keuangan.') ||
+      resourceKey.startsWith('rapot.') ||
+      resourceKey.startsWith('laporan.') ||
+      resourceKey === 'tagihan'
     ) {
       return { view: true, create: false, edit: false, delete: false };
     }
     
-    // No access
-    if (
-      resourceKey === 'manajemen_data.data_user' ||
-      resourceKey === 'manajemen_data.data_orang_tua' ||
-      resourceKey === 'settings.permissions'
-    ) {
+    if (resourceKey === 'manajemen_data.data_user' || resourceKey === 'settings.permissions') {
       return { view: false, create: false, edit: false, delete: false };
     }
     
-    // Default: read-only
     return { view: true, create: false, edit: false, delete: false };
   }
 
-  // ========================================
   // GURU
-  // ========================================
   if (role === 'Guru') {
-    // Full access - can create, edit, delete
     if (
       resourceKey === 'pengumuman' ||
       resourceKey === 'pembelajaran.jurnal_mengajar' ||
@@ -159,76 +122,52 @@ function getDefaultPermission(role: string, resourceKey: string): Permission {
       resourceKey === 'pembelajaran.presensi_mapel' ||
       resourceKey === 'pembelajaran.tugas' ||
       resourceKey === 'pembelajaran.modul_ajar' ||
-      resourceKey === 'keagamaan.monitoring_adab' ||
-      resourceKey === 'keagamaan.monitoring_sholat' ||
-      resourceKey === 'keagamaan.hafalan'
+      resourceKey.startsWith('keagamaan.')
     ) {
       return { view: true, create: true, edit: true, delete: true };
     }
     
-    // View + Edit only (can't create new or delete)
     if (
       resourceKey === 'pembelajaran.nilai_siswa' ||
       resourceKey === 'kedisiplinan.pelanggaran' ||
-      resourceKey === 'rapot.rapot_akademik' ||
-      resourceKey === 'rapot.att'
+      resourceKey.startsWith('rapot.')
     ) {
       return { view: true, create: false, edit: true, delete: false };
     }
     
-    // Read-only access
     if (
       resourceKey === 'dashboard' ||
       resourceKey === 'manajemen_data.data_siswa' ||
       resourceKey === 'manajemen_data.data_guru' ||
       resourceKey === 'pembelajaran.jadwal_pelajaran' ||
-      resourceKey === 'laporan.presensi' ||
-      resourceKey === 'laporan.tahfidz' ||
-      resourceKey === 'laporan.statistik'
+      resourceKey.startsWith('laporan.')
     ) {
       return { view: true, create: false, edit: false, delete: false };
     }
     
-    // NO ACCESS - Financial, User Management, Master Data
     if (
-      resourceKey === 'manajemen_data.data_user' ||
-      resourceKey === 'manajemen_data.data_orang_tua' ||
-      resourceKey === 'data_master.tahun_ajaran' ||
-      resourceKey === 'data_master.jurusan' ||
-      resourceKey === 'data_master.kelas' ||
-      resourceKey === 'data_master.mata_pelajaran' ||
-      resourceKey === 'data_master.kurikulum' ||
+      resourceKey.startsWith('manajemen_data.data_user') ||
+      resourceKey.startsWith('data_master.') ||
+      resourceKey.startsWith('keuangan.') ||
       resourceKey === 'tagihan' ||
-      resourceKey === 'keuangan.pembayaran' ||
-      resourceKey === 'keuangan.jenis_pembayaran' ||
       resourceKey === 'settings.permissions'
     ) {
       return { view: false, create: false, edit: false, delete: false };
     }
     
-    // Default for Guru: read-only for learning materials
     return { view: true, create: false, edit: false, delete: false };
   }
 
-  // ========================================
   // PETUGAS KEUANGAN
-  // ========================================
   if (role === 'Petugas_Keuangan') {
-    // Full access to financial resources
     if (
       resourceKey === 'tagihan' ||
-      resourceKey === 'keuangan.pembayaran' ||
-      resourceKey === 'keuangan.jenis_pembayaran'
+      resourceKey.startsWith('keuangan.') ||
+      resourceKey === 'pengumuman'
     ) {
       return { view: true, create: true, edit: true, delete: true };
     }
     
-    // Can create announcements
-    if (resourceKey === 'pengumuman') {
-      return { view: true, create: true, edit: true, delete: true };
-    }
-    
-    // Read-only to student data (for billing purposes)
     if (
       resourceKey === 'dashboard' ||
       resourceKey === 'manajemen_data.data_siswa' ||
@@ -238,33 +177,11 @@ function getDefaultPermission(role: string, resourceKey: string): Permission {
       return { view: true, create: false, edit: false, delete: false };
     }
     
-    // NO ACCESS - Teacher data, User management, Learning
-    if (
-      resourceKey === 'manajemen_data.data_user' ||
-      resourceKey === 'manajemen_data.data_guru' ||
-      resourceKey === 'manajemen_data.data_orang_tua' ||
-      resourceKey === 'settings.permissions' ||
-      resourceKey.startsWith('pembelajaran.') ||
-      resourceKey.startsWith('keagamaan.') ||
-      resourceKey.startsWith('kedisiplinan.') ||
-      resourceKey.startsWith('rapot.') ||
-      resourceKey === 'data_master.tahun_ajaran' ||
-      resourceKey === 'data_master.jurusan' ||
-      resourceKey === 'data_master.mata_pelajaran' ||
-      resourceKey === 'data_master.kurikulum'
-    ) {
-      return { view: false, create: false, edit: false, delete: false };
-    }
-    
-    // Default: no access
     return { view: false, create: false, edit: false, delete: false };
   }
 
-  // ========================================
   // SISWA
-  // ========================================
   if (role === 'Siswa') {
-    // Can view own data
     if (
       resourceKey === 'dashboard' ||
       resourceKey === 'pengumuman' ||
@@ -275,38 +192,16 @@ function getDefaultPermission(role: string, resourceKey: string): Permission {
       resourceKey === 'keagamaan.hafalan' ||
       resourceKey === 'tagihan' ||
       resourceKey === 'keuangan.pembayaran' ||
-      resourceKey === 'rapot.rapot_akademik' ||
-      resourceKey === 'rapot.att'
+      resourceKey.startsWith('rapot.')
     ) {
       return { view: true, create: false, edit: false, delete: false };
     }
     
-    // NO ACCESS to management, admin, other students' data
-    if (
-      resourceKey.startsWith('manajemen_data.') ||
-      resourceKey.startsWith('data_master.') ||
-      resourceKey.startsWith('settings.') ||
-      resourceKey === 'keuangan.jenis_pembayaran' ||
-      resourceKey === 'pembelajaran.jurnal_mengajar' ||
-      resourceKey === 'pembelajaran.presensi_harian' ||
-      resourceKey === 'pembelajaran.presensi_mapel' ||
-      resourceKey === 'keagamaan.monitoring_adab' ||
-      resourceKey === 'keagamaan.monitoring_sholat' ||
-      resourceKey === 'kedisiplinan.pelanggaran' ||
-      resourceKey.startsWith('laporan.')
-    ) {
-      return { view: false, create: false, edit: false, delete: false };
-    }
-    
-    // Default: no access
     return { view: false, create: false, edit: false, delete: false };
   }
 
-  // ========================================
   // ORANG TUA
-  // ========================================
   if (role === 'Orang_Tua') {
-    // Can view child's data
     if (
       resourceKey === 'dashboard' ||
       resourceKey === 'pengumuman' ||
@@ -316,38 +211,16 @@ function getDefaultPermission(role: string, resourceKey: string): Permission {
       resourceKey === 'keagamaan.hafalan' ||
       resourceKey === 'tagihan' ||
       resourceKey === 'keuangan.pembayaran' ||
-      resourceKey === 'rapot.rapot_akademik' ||
-      resourceKey === 'rapot.att' ||
+      resourceKey.startsWith('rapot.') ||
       resourceKey === 'laporan.presensi' ||
       resourceKey === 'laporan.tahfidz'
     ) {
       return { view: true, create: false, edit: false, delete: false };
     }
     
-    // NO ACCESS to management, admin, teacher functions
-    if (
-      resourceKey.startsWith('manajemen_data.') ||
-      resourceKey.startsWith('data_master.') ||
-      resourceKey.startsWith('settings.') ||
-      resourceKey === 'keuangan.jenis_pembayaran' ||
-      resourceKey === 'pembelajaran.jurnal_mengajar' ||
-      resourceKey === 'pembelajaran.presensi_harian' ||
-      resourceKey === 'pembelajaran.presensi_mapel' ||
-      resourceKey === 'pembelajaran.modul_ajar' ||
-      resourceKey === 'keagamaan.monitoring_adab' ||
-      resourceKey === 'keagamaan.monitoring_sholat' ||
-      resourceKey === 'kedisiplinan.pelanggaran' ||
-      resourceKey === 'laporan.statistik'
-    ) {
-      return { view: false, create: false, edit: false, delete: false };
-    }
-    
-    // Default: no access
     return { view: false, create: false, edit: false, delete: false };
   }
 
-  // ========================================
-  // DEFAULT - NO ACCESS (for safety)
-  // ========================================
+  // DEFAULT - NO ACCESS
   return { view: false, create: false, edit: false, delete: false };
 }
