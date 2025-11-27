@@ -31,7 +31,7 @@ export function usePermission(resourceKey: string) {
         const userId = user.user_id || user.username || user.reference_id;
 
         // Call API to check permission dengan timestamp untuk prevent cache
-        const response = await api.post(`/v1/permission-overrides/check?t=${Date.now()}`, {
+        const response = await api.post(`/permission-overrides/check?t=${Date.now()}`, {
           role,
           resource_key: resourceKey,
           user_id: userId,

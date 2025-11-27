@@ -77,7 +77,7 @@ export default function DataGuruPage() {
   const fetchGuru = async (page = 1, searchTerm = '') => {
     setLoading(true);
     try {
-      const response = await api.get<ApiResponse>('/v1/guru', {
+      const response = await api.get<ApiResponse>('/guru', {
         params: {
           page,
           per_page: perPage,

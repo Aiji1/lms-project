@@ -69,7 +69,7 @@ export default function DataUsersPage() {
   const fetchUsers = async (page = 1, searchTerm = '') => {
     setLoading(true);
     try {
-      const response = await api.get<ApiResponse>('/v1/users', {
+      const response = await api.get<ApiResponse>('/users', {
         params: {
           page,
           per_page: perPage,

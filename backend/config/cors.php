@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'api/v1/*', 'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
 
@@ -23,8 +23,9 @@ return [
     // Ambil dari env `CORS_ALLOWED_ORIGINS` (comma-separated). Jika tidak diset,
     // gunakan default yang mencakup frontend umum di port 3000 dan 3003.
     'allowed_origins' => array_filter(array_map('trim', explode(',', env(
-        'CORS_ALLOWED_ORIGINS',
-        'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3003,http://127.0.0.1:3003'
+        'CORS_ALLOWED_ORIGINS=',
+
+        'https://smaia7.sch.id,https://api.smaia7.sch.id,www.smaia7.sch.id,http://localhost:3000,http://127.0.0.1:3000,http://localhost:3003,http://127.0.0.1:3003'
     )))),
 
     // Gunakan delimiter regex yang benar agar preg_match tidak error

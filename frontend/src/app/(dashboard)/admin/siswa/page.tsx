@@ -78,7 +78,7 @@ export default function DataSiswaPage() {
   const fetchSiswa = async (page = 1, searchTerm = '', kelasId = '', jurusanId = '') => {
     setLoading(true);
     try {
-      const response = await api.get<ApiResponse>('/v1/siswa', {
+      const response = await api.get<ApiResponse>('/siswa', {
         params: {
           page,
           per_page: perPage,
