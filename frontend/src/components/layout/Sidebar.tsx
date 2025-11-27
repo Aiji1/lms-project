@@ -41,12 +41,10 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
 
   // Helper to load overrides
   const loadOverrides = useCallback(async () => {
-    // ✅ Guard: Only run in browser
     if (typeof window === 'undefined') {
       return;
     }
 
-    // ✅ Guard: Wait until token is available
     const token = localStorage.getItem('token');
     if (!token) {
       console.warn('⚠️ No token found, skipping permission override load');
@@ -64,11 +62,11 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
         } catch {}
       }
       
-      console.log('🔍 Loading overrides for role:', role); // Debug
+      console.log('🔍 Loading overrides for role:', role);
       
       const overrides = await fetchMergedOverrides({ role, user_id: userId });
       
-      console.log('✅ Loaded permission overrides:', overrides); // Debug
+      console.log('✅ Loaded permission overrides:', overrides);
       
       setOverrideMap(overrides);
     } catch (e) {
@@ -76,14 +74,12 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
     }
   }, [userType]);
 
-  // Fetch merged overrides on load - wait for user to be set
   useEffect(() => {
     if (user) {
       loadOverrides();
     }
   }, [user, loadOverrides]);
 
-  // Listen to global event when overrides saved to refresh Sidebar dynamically
   useEffect(() => {
     const handler = () => {
       if (process.env.NODE_ENV === 'development') {
@@ -109,7 +105,7 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
     });
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Memoize visible menu items to prevent recalculation on every render
+  // Memoize visible menu items
   const visibleMenuItems = useMemo(() => {
     return universalMenuConfig.filter(item => {
       const effectivePermissions = item.resourceKey
@@ -120,27 +116,22 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
       const hasChildren = !!(item.children && item.children.length > 0);
 
       if (!hasChildren) {
-        // Leaf item: ikuti izin parent
         return parentViewable;
       }
 
-      // Hitung child yang visible
       const visibleChildren = item.children!.filter(child => {
         const childPerms = child.resourceKey
           ? mergeItemPermissions(child.permissions, overrideMap, child.resourceKey)
           : child.permissions;
         
-        // Use getUserPermission to get the correct permission for this user
         const userPerm = getUserPermission(userType, childPerms);
         return userPerm.view;
       });
 
       if (item.href) {
-        // Parent punya href: hanya tampil jika parent viewable
         return parentViewable;
       }
 
-      // Parent tanpa href: tampil jika parent viewable ATAU ada child yang visible
       return parentViewable || visibleChildren.length > 0;
     });
   }, [userType, overrideMap]);
@@ -153,15 +144,14 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
     );
   }, []);
 
-  // Handle menu item click for mobile
-  const handleMenuClick = () => {
-    if (window.innerWidth < 1024 && onCloseMobile) {
+  // Close mobile sidebar when clicking menu item
+  const handleMenuItemClick = () => {
+    if (onCloseMobile && window.innerWidth < 1024) {
       onCloseMobile();
     }
   };
 
   const renderMenuItem = (item: MenuItem, level: number = 0) => {
-    // Effective permissions for this item
     const effectivePermissions = item.resourceKey
       ? mergeItemPermissions(item.permissions, overrideMap, item.resourceKey)
       : item.permissions;
@@ -170,7 +160,6 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
     const isExpanded = expandedItems.includes(item.label);
     const isActive = item.href ? (pathname === item.href || pathname.startsWith(item.href + '/')) : false;
 
-    // Filter children based on user permissions
     const visibleChildren = hasChildren
       ? item.children!.filter(child => {
           const childPerms = child.resourceKey
@@ -185,7 +174,6 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
     const hasVisibleChildren = visibleChildren.length > 0;
     const parentViewable = canViewMenuItem(userType, effectivePermissions);
 
-    // Decision logic for rendering
     if (!hasChildren && !parentViewable) {
       return null;
     }
@@ -207,7 +195,7 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
         {shouldRenderLink ? (
           <Link
             href={item.href!}
-            onClick={handleMenuClick}
+            onClick={handleMenuItemClick}
             className={`flex items-center space-x-3 px-3 py-2 rounded-lg mb-1 transition-colors ${
               isActive 
                 ? 'bg-blue-600 text-white' 
@@ -286,23 +274,24 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
       {/* Logo - Fixed at top */}
       <div className="p-4 border-b border-gray-800 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 flex-1 min-w-0">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
               <span className="text-white font-bold text-sm">LMS</span>
             </div>
             {!isCollapsed && (
-              <div>
-                <h1 className="font-bold text-lg">SMA Al-Azhar 7</h1>
-                <p className="text-xs text-slate-400">Learning Management System</p>
+              <div className="flex-1 min-w-0">
+                <h1 className="font-bold text-lg truncate">SMA Al-Azhar 7</h1>
+                <p className="text-xs text-slate-400 truncate">Learning Management System</p>
               </div>
             )}
           </div>
           
-          {/* Close button for mobile */}
-          {!isCollapsed && (
+          {/* Close button - Only visible on mobile when sidebar is open */}
+          {!isCollapsed && onCloseMobile && (
             <button
               onClick={onCloseMobile}
-              className="lg:hidden p-1 rounded-lg hover:bg-gray-800 transition-colors"
+              className="lg:hidden p-1.5 rounded-lg hover:bg-gray-800 transition-colors flex-shrink-0 ml-2"
+              aria-label="Close sidebar"
             >
               <X size={20} className="text-gray-400" />
             </button>
