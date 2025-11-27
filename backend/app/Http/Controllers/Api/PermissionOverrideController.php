@@ -6,9 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\PermissionOverride;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class PermissionOverrideController extends Controller
 {
+    // Cache duration: 30 minutes
+    private const CACHE_TTL = 1800;
+    
     /**
      * Get all permission overrides (filtered by params)
      */
@@ -44,6 +48,8 @@ class PermissionOverrideController extends Controller
     /**
      * Get merged overrides for a role (and optionally user_id)
      * Returns: { resource_key: { view, create, edit, delete } }
+     * 
+     * WITH CACHING - 30 minutes
      */
     public function merged(Request $request)
     {
@@ -58,37 +64,13 @@ class PermissionOverrideController extends Controller
                 ], 400);
             }
             
-            $query = PermissionOverride::where('target_type', 'role')
-                ->where('target_id', $role);
+            // Generate cache key
+            $cacheKey = $this->getCacheKey($role, $userId);
             
-            $overrides = $query->get();
-            
-            // Transform to map: resource_key => permission object
-            $result = [];
-            foreach ($overrides as $override) {
-                $result[$override->resource_key] = [
-                    'view' => (bool) $override->view,
-                    'create' => (bool) $override->create,
-                    'edit' => (bool) $override->edit,
-                    'delete' => (bool) $override->delete,
-                ];
-            }
-            
-            // If user_id provided, merge user-specific overrides (priority higher)
-            if ($userId) {
-                $userOverrides = PermissionOverride::where('target_type', 'user')
-                    ->where('target_id', $userId)
-                    ->get();
-                
-                foreach ($userOverrides as $override) {
-                    $result[$override->resource_key] = [
-                        'view' => (bool) $override->view,
-                        'create' => (bool) $override->create,
-                        'edit' => (bool) $override->edit,
-                        'delete' => (bool) $override->delete,
-                    ];
-                }
-            }
+            // Try to get from cache
+            $result = Cache::remember($cacheKey, self::CACHE_TTL, function () use ($role, $userId) {
+                return $this->fetchMergedPermissions($role, $userId);
+            });
             
             return response()->json($result);
         } catch (\Exception $e) {
@@ -99,15 +81,110 @@ class PermissionOverrideController extends Controller
             ], 500);
         }
     }
-
+    
     /**
-     * Create new permission override
+     * Fetch merged permissions from database
+     */
+    private function fetchMergedPermissions(string $role, ?string $userId): array
+    {
+        // Get role-based overrides
+        $overrides = PermissionOverride::where('target_type', 'role')
+            ->where('target_id', $role)
+            ->get();
+        
+        // Transform to map: resource_key => permission object
+        $result = [];
+        foreach ($overrides as $override) {
+            $result[$override->resource_key] = [
+                'view' => (bool) $override->view,
+                'create' => (bool) $override->create,
+                'edit' => (bool) $override->edit,
+                'delete' => (bool) $override->delete,
+            ];
+        }
+        
+        // If user_id provided, merge user-specific overrides (priority higher)
+        if ($userId) {
+            $userOverrides = PermissionOverride::where('target_type', 'user')
+                ->where('target_id', $userId)
+                ->get();
+            
+            foreach ($userOverrides as $override) {
+                $result[$override->resource_key] = [
+                    'view' => (bool) $override->view,
+                    'create' => (bool) $override->create,
+                    'edit' => (bool) $override->edit,
+                    'delete' => (bool) $override->delete,
+                ];
+            }
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Generate cache key
+     */
+    private function getCacheKey(string $role, ?string $userId): string
+    {
+        return 'permissions_merged_' . $role . ($userId ? '_user_' . $userId : '');
+    }
+    
+    /**
+     * Clear cache for specific role
+     */
+    public function clearCache(Request $request)
+    {
+        try {
+            $role = $request->input('role');
+            
+            if ($role) {
+                // Clear specific role cache
+                $pattern = 'permissions_merged_' . $role . '*';
+                $this->clearCacheByPattern($pattern);
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => "Cache cleared for role: {$role}"
+                ]);
+            } else {
+                // Clear all permission cache
+                Cache::flush();
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => 'All cache cleared'
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error clearing cache:', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal clear cache: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * Clear cache by pattern
+     */
+    private function clearCacheByPattern(string $pattern): void
+    {
+        // For file/array cache driver
+        $keys = Cache::get('cache_keys', []);
+        foreach ($keys as $key) {
+            if (fnmatch($pattern, $key)) {
+                Cache::forget($key);
+            }
+        }
+    }
+    
+    /**
+     * Store override and clear related cache
      */
     public function store(Request $request)
     {
         try {
-            Log::info('PermissionOverride store called', ['data' => $request->all()]);
-            
             $validated = $request->validate([
                 'target_type' => 'required|in:role,user',
                 'target_id' => 'required|string',
@@ -118,75 +195,34 @@ class PermissionOverrideController extends Controller
                 'delete' => 'required|boolean',
             ]);
             
-            // Check if already exists
-            $existing = PermissionOverride::where('target_type', $validated['target_type'])
-                ->where('target_id', $validated['target_id'])
-                ->where('resource_key', $validated['resource_key'])
-                ->first();
-            
-            if ($existing) {
-                Log::info('Override exists, updating', ['id' => $existing->id_override]);
-                
-                // Update instead
-                $existing->update([
-                    'view' => $validated['view'],
-                    'create' => $validated['create'],
-                    'edit' => $validated['edit'],
-                    'delete' => $validated['delete'],
-                ]);
-                
-                // Refresh from database
-                $existing->refresh();
-                
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Permission override berhasil diupdate',
-                    'data' => $existing
-                ]);
-            }
-            
-            Log::info('Creating new override', ['data' => $validated]);
-            
             $override = PermissionOverride::create($validated);
+            
+            // Clear cache for affected target
+            $this->clearRelatedCache($validated['target_type'], $validated['target_id']);
             
             return response()->json([
                 'success' => true,
-                'message' => 'Permission override berhasil dibuat',
+                'message' => 'Permission override created',
                 'data' => $override
             ], 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error('Validation error in store:', ['errors' => $e->errors()]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal',
-                'errors' => $e->errors()
-            ], 422);
         } catch (\Exception $e) {
-            Log::error('Error in PermissionOverride store:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            Log::error('Error storing permission override:', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal membuat permission override: ' . $e->getMessage()
+                'message' => 'Gagal menyimpan override: ' . $e->getMessage()
             ], 500);
         }
     }
-
+    
     /**
-     * Update permission override
+     * Update override and clear related cache
      */
     public function update(Request $request, $id)
     {
         try {
-            Log::info('PermissionOverride update called', ['id' => $id, 'data' => $request->all()]);
-            
             $override = PermissionOverride::findOrFail($id);
             
             $validated = $request->validate([
-                'target_type' => 'sometimes|in:role,user',
-                'target_id' => 'sometimes|string',
-                'resource_key' => 'sometimes|string',
                 'view' => 'sometimes|boolean',
                 'create' => 'sometimes|boolean',
                 'edit' => 'sometimes|boolean',
@@ -195,145 +231,64 @@ class PermissionOverrideController extends Controller
             
             $override->update($validated);
             
-            // Refresh from database
-            $override->refresh();
-            
-            Log::info('Override updated successfully', ['id' => $id, 'data' => $override]);
+            // Clear cache for affected target
+            $this->clearRelatedCache($override->target_type, $override->target_id);
             
             return response()->json([
                 'success' => true,
-                'message' => 'Permission override berhasil diupdate',
+                'message' => 'Permission override updated',
                 'data' => $override
             ]);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            Log::error('Override not found:', ['id' => $id]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Permission override tidak ditemukan'
-            ], 404);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error('Validation error in update:', ['errors' => $e->errors()]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal',
-                'errors' => $e->errors()
-            ], 422);
         } catch (\Exception $e) {
-            Log::error('Error in PermissionOverride update:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            Log::error('Error updating permission override:', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal update permission override: ' . $e->getMessage()
+                'message' => 'Gagal update override: ' . $e->getMessage()
             ], 500);
         }
     }
-
+    
     /**
-     * Delete permission override
+     * Delete override and clear related cache
      */
     public function destroy($id)
     {
         try {
-            Log::info('PermissionOverride destroy called', ['id' => $id]);
-            
             $override = PermissionOverride::findOrFail($id);
+            
+            $targetType = $override->target_type;
+            $targetId = $override->target_id;
+            
             $override->delete();
             
-            Log::info('Override deleted successfully', ['id' => $id]);
+            // Clear cache for affected target
+            $this->clearRelatedCache($targetType, $targetId);
             
             return response()->json([
                 'success' => true,
-                'message' => 'Permission override berhasil dihapus'
+                'message' => 'Permission override deleted'
             ]);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            Log::error('Override not found for delete:', ['id' => $id]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Permission override tidak ditemukan'
-            ], 404);
         } catch (\Exception $e) {
-            Log::error('Error in PermissionOverride destroy:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            Log::error('Error deleting permission override:', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal hapus permission override: ' . $e->getMessage()
+                'message' => 'Gagal delete override: ' . $e->getMessage()
             ], 500);
         }
     }
-
+    
     /**
-     * Check permission for specific user
+     * Clear cache for specific target
      */
-    public function check(Request $request)
+    private function clearRelatedCache(string $targetType, string $targetId): void
     {
-        try {
-            $role = $request->input('role');
-            $resourceKey = $request->input('resource_key');
-            $userId = $request->input('user_id');
-            
-            if (!$role || !$resourceKey) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Parameter role dan resource_key wajib diisi'
-                ], 400);
-            }
-            
-            // Check user-specific override first
-            if ($userId) {
-                $userOverride = PermissionOverride::where('target_type', 'user')
-                    ->where('target_id', $userId)
-                    ->where('resource_key', $resourceKey)
-                    ->first();
-                
-                if ($userOverride) {
-                    return response()->json([
-                        'success' => true,
-                        'data' => [
-                            'view' => (bool) $userOverride->view,
-                            'create' => (bool) $userOverride->create,
-                            'edit' => (bool) $userOverride->edit,
-                            'delete' => (bool) $userOverride->delete,
-                        ],
-                        'source' => 'user_override'
-                    ]);
-                }
-            }
-            
-            // Check role-based override
-            $roleOverride = PermissionOverride::where('target_type', 'role')
-                ->where('target_id', $role)
-                ->where('resource_key', $resourceKey)
-                ->first();
-            
-            if ($roleOverride) {
-                return response()->json([
-                    'success' => true,
-                    'data' => [
-                        'view' => (bool) $roleOverride->view,
-                        'create' => (bool) $roleOverride->create,
-                        'edit' => (bool) $roleOverride->edit,
-                        'delete' => (bool) $roleOverride->delete,
-                    ],
-                    'source' => 'role_override'
-                ]);
-            }
-            
-            // No override found - return null (use default permissions)
-            return response()->json([
-                'success' => true,
-                'data' => null,
-                'source' => 'default'
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error in PermissionOverride check:', ['error' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal cek permission: ' . $e->getMessage()
-            ], 500);
+        if ($targetType === 'role') {
+            $cacheKey = 'permissions_merged_' . $targetId . '*';
+            $this->clearCacheByPattern($cacheKey);
+        } elseif ($targetType === 'user') {
+            // Clear all user-specific caches (harder to target specific user)
+            $cacheKey = 'permissions_merged_*_user_' . $targetId;
+            $this->clearCacheByPattern($cacheKey);
         }
     }
 }
