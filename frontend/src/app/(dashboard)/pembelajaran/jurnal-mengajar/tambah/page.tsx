@@ -3,328 +3,395 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, BookOpen, Calendar, User, Clock } from 'lucide-react';
+import { ArrowLeft, Save, BookOpen, Calendar, Clock, FileText, Users } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useAuth } from '@/hooks/useAuth';
+import { useRouteProtection } from '@/hooks/useRouteProtection';
+import { usePermission } from '@/hooks/usePermission';
+
+interface MataPelajaran {
+  id_mata_pelajaran: number;
+  nama_mata_pelajaran: string;
+}
+
+interface Kelas {
+  id_kelas: number;
+  nama_kelas: string;
+  tahun_ajaran: string;
+  semester: string;
+}
 
 interface FormData {
-  id_jadwal: string;
+  id_mata_pelajaran: string;
+  id_kelas: string;
   tanggal: string;
-  status_mengajar: 'Hadir' | 'Tidak_Hadir' | 'Diganti';
+  jam_ke_mulai: string;
+  jam_ke_selesai: string;
+  status_mengajar: string;
   materi_diajarkan: string;
-  keterangan_tambahan: string;
+  keterangan: string;
 }
 
-interface JadwalOption {
-  id_jadwal: number;
-  display_name: string;
-  mata_pelajaran: string;
-  kelas: string;
-  hari: string;
-  jam_ke: number;
-  nama_guru: string;
-  tahun_ajaran: string;
-  semester: string;
-}
-
-interface TahunAjaranOption {
-  id_tahun_ajaran: number;
-  tahun_ajaran: string;
-  semester: string;
-  status: string;
-}
-
-export default function TambahJurnalMengajarPage() {
-  const router = useRouter();
-  const { user } = useAuth();
-  
-  const [formData, setFormData] = useState<FormData>({
-    id_jadwal: '',
-    tanggal: new Date().toISOString().split('T')[0],
-    status_mengajar: 'Hadir',
-    materi_diajarkan: '',
-    keterangan_tambahan: ''
+export default function CreateJurnalMengajarPage() {
+  // 🔒 ROUTE PROTECTION
+  const { isAuthorized, loading: permLoading } = useRouteProtection({
+    resourceKey: 'pembelajaran.jurnal_mengajar',
+    redirectTo: '/dashboard'
   });
 
-  const [errors, setErrors] = useState<Partial<FormData>>({});
+  const { canCreate } = usePermission('pembelajaran.jurnal_mengajar');
+
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [jadwalOptions, setJadwalOptions] = useState<JadwalOption[]>([]);
-  const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranOption[]>([]);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // Form options
+  const [mataPelajaranList, setMataPelajaranList] = useState<MataPelajaran[]>([]);
+  const [kelasList, setKelasList] = useState<Kelas[]>([]);
+  const [jamKeOptions] = useState<number[]>(Array.from({ length: 10 }, (_, i) => i + 1));
+
+  // Form data
+  const [formData, setFormData] = useState<FormData>({
+    id_mata_pelajaran: '',
+    id_kelas: '',
+    tanggal: new Date().toISOString().split('T')[0],
+    jam_ke_mulai: '1',
+    jam_ke_selesai: '1',
+    status_mengajar: 'Hadir',
+    materi_diajarkan: '',
+    keterangan: ''
+  });
 
   useEffect(() => {
+    if (!permLoading && !canCreate) {
+      router.push('/dashboard');
+      return;
+    }
     fetchFormData();
-  }, []);
+  }, [permLoading, canCreate]);
 
   const fetchFormData = async () => {
     try {
-      // Fetch jadwal options
-      const jadwalResponse = await api.get('/jurnal-mengajar-form-data');
-      if (jadwalResponse.data.success) {
-        setJadwalOptions(jadwalResponse.data.data.jadwal_pelajaran || []);
+      const response = await api.get('/jurnal-mengajar-form-data');
+      if (response.data.success) {
+        setMataPelajaranList(response.data.data.mata_pelajaran || []);
+        setKelasList(response.data.data.kelas || []);
       }
-
-      // Fetch tahun ajaran options
-      const tahunAjaranResponse = await api.get('/tahun-ajaran-form-data');
-      if (tahunAjaranResponse.data.success) {
-        setTahunAjaranOptions(tahunAjaranResponse.data.data.tahun_ajaran || []);
-      }
-    } catch (error) {
-      console.error('Error fetching form data:', error);
+    } catch (err: any) {
+      console.error('Error fetching form data:', err);
+      setError('Gagal memuat data form');
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-    
-    // Clear error when user starts typing
-    if (errors[name as keyof FormData]) {
-      setErrors(prev => ({
+
+    // Auto-adjust jam_ke_selesai if jam_ke_mulai is changed
+    if (name === 'jam_ke_mulai' && parseInt(value) > parseInt(formData.jam_ke_selesai)) {
+      setFormData(prev => ({
         ...prev,
-        [name]: undefined
+        jam_ke_selesai: value
       }));
     }
   };
 
-  const validateForm = () => {
-    const newErrors: Partial<FormData> = {};
-
-    if (!formData.id_jadwal) {
-      newErrors.id_jadwal = 'Jadwal harus dipilih';
-    }
-
-    if (!formData.tanggal) {
-      newErrors.tanggal = 'Tanggal harus diisi';
-    }
-
-    if (!formData.materi_diajarkan.trim()) {
-      newErrors.materi_diajarkan = 'Materi yang diajarkan harus diisi';
-    } else if (formData.materi_diajarkan.length < 10) {
-      newErrors.materi_diajarkan = 'Materi yang diajarkan minimal 10 karakter';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-
     setLoading(true);
+    setError('');
+    setSuccess('');
+
     try {
       const response = await api.post('/jurnal-mengajar', {
-        ...formData,
-        id_jadwal: parseInt(formData.id_jadwal)
+        id_mata_pelajaran: parseInt(formData.id_mata_pelajaran),
+        id_kelas: parseInt(formData.id_kelas),
+        tanggal: formData.tanggal,
+        jam_ke_mulai: parseInt(formData.jam_ke_mulai),
+        jam_ke_selesai: parseInt(formData.jam_ke_selesai),
+        status_mengajar: formData.status_mengajar,
+        materi_diajarkan: formData.materi_diajarkan,
+        keterangan: formData.keterangan
       });
 
       if (response.data.success) {
-        router.push('/pembelajaran/jurnal-mengajar');
-      } else {
-        alert(response.data.message || 'Gagal menyimpan jurnal mengajar');
+        setSuccess('Jurnal mengajar berhasil ditambahkan!');
+        setTimeout(() => {
+          router.push('/pembelajaran/jurnal-mengajar');
+        }, 1500);
       }
-    } catch (error) {
-      console.error('Error saving jurnal mengajar:', error);
-      alert('Terjadi kesalahan saat menyimpan jurnal mengajar');
+    } catch (err: any) {
+      console.error('Error creating jurnal:', err);
+      setError(err.response?.data?.message || 'Gagal menambahkan jurnal mengajar');
     } finally {
       setLoading(false);
     }
   };
 
-  const getSelectedJadwal = () => {
-    return jadwalOptions.find(jadwal => jadwal.id_jadwal.toString() === formData.id_jadwal);
-  };
+  if (permLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Memuat...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canCreate) {
+    return null;
+  }
 
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <Link
-          href="/pembelajaran/jurnal-mengajar"
-          className="flex items-center text-gray-600 hover:text-gray-900"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-blue-600" />
-            Tambah Jurnal Mengajar
-          </h1>
-          <p className="text-gray-600">Buat jurnal mengajar baru</p>
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-2">
+          <Link
+            href="/pembelajaran/jurnal-mengajar"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5 text-gray-600" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Tambah Jurnal Mengajar</h1>
+            <p className="text-gray-600 text-sm mt-1">Catat kegiatan mengajar Anda</p>
+          </div>
         </div>
       </div>
+
+      {/* Alert Messages */}
+      {error && (
+        <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {success && (
+        <div className="mb-6 bg-green-50 border-l-4 border-green-500 p-4 rounded">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-green-700">{success}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Form */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Mata Pelajaran & Kelas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Jadwal */}
             <div>
-              <label htmlFor="id_jadwal" className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="inline h-4 w-4 mr-1" />
-                Jadwal Pelajaran *
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  Mata Pelajaran <span className="text-red-500">*</span>
+                </div>
               </label>
               <select
-                id="id_jadwal"
-                name="id_jadwal"
-                value={formData.id_jadwal}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.id_jadwal ? 'border-red-500' : 'border-gray-300'
-                }`}
+                name="id_mata_pelajaran"
+                value={formData.id_mata_pelajaran}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">Pilih Jadwal Pelajaran</option>
-                {jadwalOptions.map((jadwal) => (
-                  <option key={jadwal.id_jadwal} value={jadwal.id_jadwal}>
-                    {jadwal.display_name}
+                <option value="">Pilih Mata Pelajaran</option>
+                {mataPelajaranList.map((mapel) => (
+                  <option key={mapel.id_mata_pelajaran} value={mapel.id_mata_pelajaran}>
+                    {mapel.nama_mata_pelajaran}
                   </option>
                 ))}
               </select>
-              {errors.id_jadwal && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  {errors.id_jadwal}
-                </p>
-              )}
             </div>
 
-            {/* Tanggal */}
             <div>
-              <label htmlFor="tanggal" className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="inline h-4 w-4 mr-1" />
-                Tanggal Mengajar *
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Kelas <span className="text-red-500">*</span>
+                </div>
+              </label>
+              <select
+                name="id_kelas"
+                value={formData.id_kelas}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Pilih Kelas</option>
+                {kelasList.map((kelas) => (
+                  <option key={kelas.id_kelas} value={kelas.id_kelas}>
+                    {kelas.nama_kelas} ({kelas.tahun_ajaran} - {kelas.semester})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tanggal & Status */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Tanggal <span className="text-red-500">*</span>
+                </div>
               </label>
               <input
                 type="date"
-                id="tanggal"
                 name="tanggal"
                 value={formData.tanggal}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.tanggal ? 'border-red-500' : 'border-gray-300'
-                }`}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-              {errors.tanggal && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  {errors.tanggal}
-                </p>
-              )}
             </div>
 
-            {/* Jam Ke - Auto-filled from selected schedule */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Clock className="inline h-4 w-4 mr-1" />
-                Jam Ke
-              </label>
-              <div className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600">
-                {getSelectedJadwal() ? `Jam ke-${getSelectedJadwal()?.jam_ke}` : 'Pilih jadwal terlebih dahulu'}
-              </div>
-            </div>
-
-            {/* Status Mengajar */}
-            <div>
-              <label htmlFor="status_mengajar" className="block text-sm font-medium text-gray-700 mb-2">
-                <User className="inline h-4 w-4 mr-1" />
-                Status Mengajar *
+                Status Mengajar <span className="text-red-500">*</span>
               </label>
               <select
-                id="status_mengajar"
                 name="status_mengajar"
                 value={formData.status_mengajar}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="Hadir">Hadir</option>
                 <option value="Tidak_Hadir">Tidak Hadir</option>
                 <option value="Diganti">Diganti</option>
               </select>
             </div>
+          </div>
 
-            {/* Info Jadwal Terpilih */}
-            {getSelectedJadwal() && (
-              <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Informasi Jadwal
-                </label>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <p><strong>Mata Pelajaran:</strong> {getSelectedJadwal()?.mata_pelajaran}</p>
-                    <p><strong>Kelas:</strong> {getSelectedJadwal()?.kelas}</p>
-                    <p><strong>Hari:</strong> {getSelectedJadwal()?.hari}</p>
-                  </div>
-                </div>
+          {/* Jam Ke */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Jam Pelajaran <span className="text-red-500">*</span>
               </div>
-            )}
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Jam Mulai</label>
+                <select
+                  name="jam_ke_mulai"
+                  value={formData.jam_ke_mulai}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {jamKeOptions.map((jam) => (
+                    <option key={jam} value={jam}>
+                      Jam ke-{jam}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Jam Selesai</label>
+                <select
+                  name="jam_ke_selesai"
+                  value={formData.jam_ke_selesai}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {jamKeOptions
+                    .filter(jam => jam >= parseInt(formData.jam_ke_mulai))
+                    .map((jam) => (
+                      <option key={jam} value={jam}>
+                        Jam ke-{jam}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              {formData.jam_ke_mulai === formData.jam_ke_selesai 
+                ? `Mengajar 1 jam pelajaran (Jam ke-${formData.jam_ke_mulai})`
+                : `Mengajar ${parseInt(formData.jam_ke_selesai) - parseInt(formData.jam_ke_mulai) + 1} jam pelajaran (Jam ke-${formData.jam_ke_mulai} s/d ${formData.jam_ke_selesai})`
+              }
+            </p>
           </div>
 
           {/* Materi Diajarkan */}
           <div>
-            <label htmlFor="materi_diajarkan" className="block text-sm font-medium text-gray-700 mb-2">
-              <BookOpen className="inline h-4 w-4 mr-1" />
-              Materi yang Diajarkan *
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Materi Diajarkan <span className="text-red-500">*</span>
+              </div>
             </label>
             <textarea
-              id="materi_diajarkan"
               name="materi_diajarkan"
               value={formData.materi_diajarkan}
-              onChange={handleInputChange}
+              onChange={handleChange}
+              required
               rows={4}
-              placeholder="Masukkan materi yang diajarkan secara detail..."
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.materi_diajarkan ? 'border-red-500' : 'border-gray-300'
-              }`}
+              placeholder="Tulis materi yang diajarkan (minimal 10 karakter)..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            {errors.materi_diajarkan && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                {errors.materi_diajarkan}
-              </p>
-            )}
-            <p className="mt-1 text-sm text-gray-500">
-              {formData.materi_diajarkan.length} karakter
+            <p className="text-xs text-gray-500 mt-1">
+              {formData.materi_diajarkan.length} / 1000 karakter
             </p>
           </div>
 
-          {/* Keterangan Tambahan */}
+          {/* Keterangan */}
           <div>
-            <label htmlFor="keterangan_tambahan" className="block text-sm font-medium text-gray-700 mb-2">
-              Keterangan Tambahan
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Keterangan (Opsional)
             </label>
             <textarea
-              id="keterangan_tambahan"
-              name="keterangan_tambahan"
-              value={formData.keterangan_tambahan}
-              onChange={handleInputChange}
+              name="keterangan"
+              value={formData.keterangan}
+              onChange={handleChange}
               rows={3}
-              placeholder="Masukkan keterangan tambahan untuk mencatat murid yang tidak hadir atau keterangan lainnya..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Catatan tambahan jika ada..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            <p className="mt-1 text-sm text-gray-500">
-              {formData.keterangan_tambahan.length} karakter
+            <p className="text-xs text-gray-500 mt-1">
+              {formData.keterangan.length} / 500 karakter
             </p>
           </div>
 
-          {/* Submit Buttons */}
-          <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200">
-            <Link
-              href="/pembelajaran/jurnal-mengajar"
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Batal
-            </Link>
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4 border-t">
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
-              <Save className="h-4 w-4 mr-2" />
+              <Save className="h-4 w-4" />
               {loading ? 'Menyimpan...' : 'Simpan Jurnal'}
             </button>
+            <Link
+              href="/pembelajaran/jurnal-mengajar"
+              className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Batal
+            </Link>
           </div>
         </form>
       </div>

@@ -55,14 +55,18 @@ Route::prefix('v1')->group(function () {
         Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
         Route::get('/dashboard/quick-stats', [DashboardController::class, 'getQuickStats']);
         
-        // JURNAL MENGAJAR ROUTES
+        // ========================================
+        // JURNAL MENGAJAR ROUTES (UPDATED ORDER)
+        // ========================================
         // Form data route
         Route::get('/jurnal-mengajar-form-data', [JurnalMengajarController::class, 'getFormData']);
+        
         // Export route
         Route::get('/jurnal-mengajar/export', [JurnalMengajarController::class, 'export']);
-        
+
         // Jurnal Mengajar API Resource
         Route::apiResource('jurnal-mengajar', JurnalMengajarController::class);
+        // ========================================
         
         // SISWA ROUTES
         // Template route HARUS di atas apiResource
@@ -317,7 +321,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // ========================================
-        // QR CODE ROUTES (ADD THIS SECTION)
+        // QR CODE ROUTES
         // ========================================
 
         // QR Code routes (inside custom.auth middleware group)

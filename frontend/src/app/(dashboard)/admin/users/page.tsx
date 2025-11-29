@@ -108,7 +108,7 @@ export default function DataUsersPage() {
     if (!confirm('Apakah Anda yakin ingin menghapus user ini?')) return;
 
     try {
-      const response = await api.delete(`/v1/users/${user_id}`);
+      const response = await api.delete(`/users/${user_id}`);
       if (response.data.success) {
         alert('User berhasil dihapus');
         fetchUsers(currentPage, search);
@@ -136,7 +136,7 @@ export default function DataUsersPage() {
     }
 
     try {
-      const response = await api.post(`/v1/users/${user_id}/reset-password`, {
+      const response = await api.post(`/users/${user_id}/reset-password`, {
         new_password: newPassword,
         new_password_confirmation: confirmPassword
       });

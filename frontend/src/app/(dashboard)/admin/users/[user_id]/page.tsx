@@ -41,7 +41,7 @@ export default function DetailUserPage() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const response = await api.get(`/v1/users/${user_id}`);
+        const response = await api.get(`/users/${user_id}`);
         if (response.data.success) {
           setUserData(response.data.data);
         } else {

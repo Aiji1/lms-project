@@ -5,7 +5,7 @@ import { Settings, RefreshCcw, Save, ChevronDown, ChevronRight, Search, Check, X
 import { api } from '@/lib/api';
 import { Permission, UserRole, DEFAULT_PERMISSIONS, FULL_PERMISSIONS, READ_ONLY_PERMISSIONS, VIEW_EDIT_PERMISSIONS, VIEW_CREATE_PERMISSIONS } from '@/types/permissions';
 import { universalMenuConfig } from '@/config/menuConfig';
-import { fetchMergedOverrides, mergeItemPermissions, clearPermissionCache } from '@/lib/permissionOverrides';
+import { fetchMergedOverrides, mergeItemPermissions } from '@/lib/permissionOverrides';
 import { getUserPermission } from '@/lib/permissions';
 
 interface OverrideItem {
@@ -327,18 +327,6 @@ export default function PermissionsPage() {
       console.log('🔄 Refreshing data from server...');
       await new Promise(resolve => setTimeout(resolve, 500)); // Extra wait
       await handleRefresh();
-
-      // Clear frontend cache
-      console.log('🧹 Clearing frontend permission cache...');
-      clearPermissionCache();
-
-      // Clear backend cache
-      try {
-        await api.post('/permission-overrides/clear-cache', { role: selectedRole });
-        console.log('✅ Backend cache cleared');
-      } catch (e) {
-        console.warn('Failed to clear backend cache:', e);
-      }
 
     } catch (e: any) {
       console.error('❌ Error saving permission overrides:', e);

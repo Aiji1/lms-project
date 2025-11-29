@@ -78,7 +78,7 @@ export default function EditSiswaPage() {
 
   const fetchSiswaData = async () => {
     try {
-      const response = await api.get(`/v1/siswa/${nis}`);
+      const response = await api.get(`/siswa/${nis}`);
       if (response.data.success) {
         const siswa = response.data.data;
         setFormData({
@@ -159,7 +159,7 @@ export default function EditSiswaPage() {
         golongan_darah: formData.golongan_darah || null
       };
 
-      const response = await api.put(`/v1/siswa/${nis}`, submitData);
+      const response = await api.put(`/siswa/${nis}`, submitData);
       
       if (response.data.success) {
         alert('Data siswa berhasil diupdate!');

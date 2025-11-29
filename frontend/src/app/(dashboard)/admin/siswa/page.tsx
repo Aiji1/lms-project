@@ -139,7 +139,7 @@ export default function DataSiswaPage() {
     if (!confirm('Apakah Anda yakin ingin menghapus data siswa ini?')) return;
 
     try {
-      const response = await api.delete(`/v1/siswa/${nis}`);
+      const response = await api.delete(`/siswa/${nis}`);
       if (response.data.success) {
         alert('Data siswa berhasil dihapus');
         fetchSiswa(currentPage, search, kelasFilter, jurusanFilter);

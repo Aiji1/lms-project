@@ -140,7 +140,7 @@ export default function JurnalMengajarPage() {
         ...(kelasFilter && { kelas: kelasFilter })
       });
 
-      const response = await api.get(`/v1/jurnal-mengajar?${params}`);
+      const response = await api.get(`/jurnal-mengajar?${params}`);
       if (response.data.success) {
         const apiResponse: ApiResponse = response.data;
         setJurnal(apiResponse.data.data || []);
@@ -164,7 +164,7 @@ export default function JurnalMengajarPage() {
     if (!selectedJurnal) return;
     
     try {
-      const response = await api.delete(`/v1/jurnal-mengajar/${selectedJurnal.id_jurnal}`);
+      const response = await api.delete(`/jurnal-mengajar/${selectedJurnal.id_jurnal}`);
       if (response.data.success) {
         setJurnal(jurnal.filter(item => item.id_jurnal !== selectedJurnal.id_jurnal));
         setShowDeleteModal(false);
@@ -209,7 +209,7 @@ export default function JurnalMengajarPage() {
         ...(kelasFilter && { kelas: kelasFilter })
       });
 
-      const response = await api.get(`/v1/jurnal-mengajar/export?${params}`, {
+      const response = await api.get(`/jurnal-mengajar/export?${params}`, {
         responseType: 'blob'
       });
 

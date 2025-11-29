@@ -89,7 +89,7 @@ export default function EditGuruPage() {
   useEffect(() => {
     const fetchGuruData = async () => {
       try {
-        const response = await api.get(`/v1/guru/${nik_guru}`);
+        const response = await api.get(`/guru/${nik_guru}`);
         if (response.data.success) {
           const data = response.data.data;
           setGuruData(data);
@@ -228,7 +228,7 @@ export default function EditGuruPage() {
 
     setLoading(true);
     try {
-      const response = await api.put(`/v1/guru/${nik_guru}`, formData);
+      const response = await api.put(`/guru/${nik_guru}`, formData);
       
       if (response.data.success) {
         alert('Data guru berhasil diupdate');

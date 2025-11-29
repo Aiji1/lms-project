@@ -69,7 +69,7 @@ export default function DetailGuruPage() {
   useEffect(() => {
     const fetchGuruData = async () => {
       try {
-        const response = await api.get(`/v1/guru/${nik_guru}`);
+        const response = await api.get(`/guru/${nik_guru}`);
         if (response.data.success) {
           setGuruData(response.data.data);
         } else {

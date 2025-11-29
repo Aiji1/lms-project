@@ -67,7 +67,7 @@ export default function MonitoringSholatPage() {
       try {
         setError(null);
         // Ambil daftar kelas dari resource utama agar pasti berisi id_kelas & nama_kelas
-        const resp = await api.get("/v1/kelas", { params: { per_page: 1000 } });
+        const resp = await api.get("/kelas", { params: { per_page: 1000 } });
         const items = resp.data?.data || [];
         setKelasOptions(Array.isArray(items) ? items : []);
       } catch (err: any) {
@@ -106,17 +106,17 @@ export default function MonitoringSholatPage() {
       if (tanggal) params.tanggal = tanggal;
       if (jenisSholat) params.jenis_sholat = jenisSholat;
 
-      const statsResp = await api.get("/v1/monitoring-sholat/stats", {
+      const statsResp = await api.get("/monitoring-sholat/stats", {
         params,
       });
       setStats(statsResp.data.data);
 
       const [detailsResp, dhuhurResp, asarResp] = await Promise.all([
-        api.get("/v1/monitoring-sholat/details", { params }),
-        api.get("/v1/monitoring-sholat/details", {
+        api.get("/monitoring-sholat/details", { params }),
+        api.get("/monitoring-sholat/details", {
           params: { ...params, jenis_sholat: "Dhuhur" },
         }),
-        api.get("/v1/monitoring-sholat/details", {
+        api.get("/monitoring-sholat/details", {
           params: { ...params, jenis_sholat: "Asar" },
         }),
       ]);
@@ -151,7 +151,7 @@ export default function MonitoringSholatPage() {
       const params: any = { month };
       if (selectedKelas) params.kelas = Number(selectedKelas);
 
-      const resp = await api.get("/v1/monitoring-sholat/export-monthly", {
+      const resp = await api.get("/monitoring-sholat/export-monthly", {
         params,
         responseType: "blob",
       });
@@ -193,7 +193,7 @@ export default function MonitoringSholatPage() {
         alert("Tidak ada perubahan ceklist Dzuhur untuk disimpan");
         return;
       }
-      await api.post("/v1/monitoring-sholat/submit", {
+      await api.post("/monitoring-sholat/submit", {
         tanggal,
         jenis_sholat: "Dhuhur",
         entries: entriesDh,
@@ -217,7 +217,7 @@ export default function MonitoringSholatPage() {
         alert("Tidak ada perubahan ceklist Asar untuk disimpan");
         return;
       }
-      await api.post("/v1/monitoring-sholat/submit", {
+      await api.post("/monitoring-sholat/submit", {
         tanggal,
         jenis_sholat: "Asar",
         entries: entriesAs,

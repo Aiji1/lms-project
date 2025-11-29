@@ -79,7 +79,7 @@ export default function EditUserPage() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const response = await api.get(`/v1/users/${user_id}`);
+        const response = await api.get(`/users/${user_id}`);
         if (response.data.success) {
           const data = response.data.data;
           setUserData(data);
@@ -219,7 +219,7 @@ export default function EditUserPage() {
 
     setLoading(true);
     try {
-      const response = await api.put(`/v1/users/${user_id}`, formData);
+      const response = await api.put(`/users/${user_id}`, formData);
       
       if (response.data.success) {
         alert('User berhasil diupdate');
