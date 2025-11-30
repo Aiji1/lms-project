@@ -626,8 +626,8 @@ export default function DataSiswaPage() {
             fetchSiswa(currentPage, search);
           }}
           title="Import Data Siswa"
-          endpoint="/v1/siswa/import"
-          templateEndpoint="/v1/siswa/template"
+          endpoint="/siswa/import"
+          templateEndpoint="/siswa/template"
         />
       )}
     </div>

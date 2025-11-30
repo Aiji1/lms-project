@@ -91,14 +91,6 @@ export const universalMenuConfig: MenuItem[] = [
         resourceKey: 'manajemen_data.data_user',
         permissions: PERMISSION_PRESETS.ADMIN_ONLY,
         description: 'Kelola akun pengguna sistem'
-      },
-      {
-        label: 'Data Orang Tua',
-        href: '/admin/orang-tua',
-        icon: <Users size={18} />,
-        resourceKey: 'manajemen_data.data_orang_tua',
-        permissions: PERMISSION_PRESETS.ADMIN_ONLY,
-        description: 'Kelola data orang tua siswa'
       }
     ]
   },
@@ -202,30 +194,6 @@ export const universalMenuConfig: MenuItem[] = [
           createPermissionForRoles(['Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
         ),
         description: 'Kelola jurnal mengajar harian'
-      },
-      {
-        label: 'Presensi Mapel',
-        href: '/presensi/mapel',
-        icon: <Clock size={18} />,
-        resourceKey: 'pembelajaran.presensi_mapel',
-        permissions: mergePermissions(
-          createPermissionForRoles(['Admin'], FULL_PERMISSIONS),
-          createPermissionForRoles(['Guru'], VIEW_EDIT_PERMISSIONS),
-          createPermissionForRoles(['Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
-        ),
-        description: 'Kelola presensi per mata pelajaran'
-      },
-      {
-        label: 'Nilai Siswa',
-        href: '/pembelajaran/nilai-siswa',
-        icon: <Award size={18} />,
-        resourceKey: 'pembelajaran.nilai_siswa',
-        permissions: mergePermissions(
-          createPermissionForRoles(['Admin'], FULL_PERMISSIONS),
-          createPermissionForRoles(['Guru'], VIEW_EDIT_PERMISSIONS),
-          createPermissionForRoles(['Siswa', 'Orang_Tua', 'Kepala_Sekolah'], READ_ONLY_PERMISSIONS)
-        ),
-        description: 'Kelola dan lihat nilai siswa'
       },
       {
         label: 'Tugas',

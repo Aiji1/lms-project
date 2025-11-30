@@ -506,8 +506,8 @@ export default function DataGuruPage() {
             fetchGuru(currentPage, search);
           }}
           title="Import Data Guru"
-          endpoint="/v1/guru/import"
-          templateEndpoint="/v1/guru/template"
+          endpoint="/guru/import"
+          templateEndpoint="/guru/template"
         />
       )}
     </div>

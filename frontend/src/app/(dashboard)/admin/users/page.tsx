@@ -518,8 +518,8 @@ export default function DataUsersPage() {
             fetchUsers(currentPage, search);
           }}
           title="Import Data Users"
-          endpoint="/v1/users/import"
-          templateEndpoint="/v1/users/template"
+          endpoint="/users/import"
+          templateEndpoint="/users/template"
         />
       )}
     </div>
