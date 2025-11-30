@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import Image from 'next/image';
 import { 
   ChevronDown,
   ChevronRight,
@@ -275,13 +276,22 @@ export default function Sidebar({ userType, isCollapsed = false, onCloseMobile }
       <div className="p-4 border-b border-gray-800 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 flex-1 min-w-0">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-sm">LMS</span>
-            </div>
-            {!isCollapsed && (
-              <div className="flex-1 min-w-0">
-                <h1 className="font-bold text-lg truncate">SMA Al-Azhar 7</h1>
-                <p className="text-xs text-slate-400 truncate">Learning Management System</p>
+            {!isCollapsed ? (
+              /* Logo Full - When sidebar is expanded */
+              <div className="flex-1 min-w-0 flex items-center justify-center py-2">
+                <Image 
+                  src="/logo_baru.png" 
+                  alt="SMA Islam Al Azhar 7 Sukoharjo" 
+                  width={200}
+                  height={50}
+                  className="w-auto h-auto max-w-full"
+                  priority
+                />
+              </div>
+            ) : (
+              /* Logo Icon - When sidebar is collapsed */
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-sm">LMS</span>
               </div>
             )}
           </div>

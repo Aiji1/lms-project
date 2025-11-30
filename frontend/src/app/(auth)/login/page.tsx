@@ -245,7 +245,7 @@ export default function LoginPage() {
 
               {/* Footer */}
               <div className="mt-8 text-center text-sm text-gray-500 space-y-1">
-                <p>© 2024 SMA Islam Al Azhar 7 Sukoharjo</p>
+                <p>© 2025 SMA Islam Al Azhar 7 Sukoharjo</p>
                 <p className="text-xs">Sistem Pembelajaran Digital</p>
               </div>
             </div>
