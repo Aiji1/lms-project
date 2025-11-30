@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Lock, User, LogIn } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { api } from '@/lib/api';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,7 +23,6 @@ export default function LoginPage() {
       [name]: value
     }));
     
-    // Clear error when user starts typing
     if (error) {
       setError('');
     }
@@ -39,21 +39,16 @@ export default function LoginPage() {
       if (response.data.success) {
         const { user, token } = response.data.data;
         
-        // Store token and user data
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
         
-        // Update API default headers
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         
-        // SIMPLIFIED REDIRECT - All roles go to shared dashboard except Admin
         switch (user.user_type) {
           case 'Admin':
-            // Admin tetap ke manajemen siswa (existing flow)
             router.push('/admin/siswa');
             break;
           default:
-            // Semua role lain ke shared dashboard dengan konten dinamis
             router.push('/dashboard');
         }
       }
@@ -70,180 +65,192 @@ export default function LoginPage() {
     }
   };
 
-  const fillDemoCredentials = (role: string) => {
-    const credentials = {
-      admin: { username: 'admin', password: 'admin123' },
-      kepsek: { username: 'kepsek', password: 'password' },
-      keuangan: { username: 'keuangan', password: 'password' },
-      guru: { username: 'guru', password: 'password' },
-      siswa: { username: 'siswa', password: 'password' },
-      ortu: { username: 'ortu_ai', password: 'password' }
-    }[role];
-
-    if (credentials) {
-      setFormData(credentials);
-    }
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        {/* Header */}
-        <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-blue-600 rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-xl">LMS</span>
-          </div>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            Sistem Learning Management
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            SMA Islam Al-Azhar 7 Sukoharjo
-          </p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center p-4 relative"
+      style={{
+        backgroundImage: 'url(/outer-background.jpg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundColor: '#0066cc'
+      }}>
+      
+      {/* Overlay untuk outer background */}
+      <div className="absolute inset-0 bg-blue-900/40"></div>
 
-        {/* Demo Credentials */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <p className="text-sm font-medium text-gray-700 mb-2">Demo Credentials:</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => fillDemoCredentials('admin')}
-              className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
-            >
-              Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemoCredentials('kepsek')}
-              className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
-            >
-              Kepala Sekolah
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemoCredentials('keuangan')}
-              className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
-            >
-              Keuangan
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemoCredentials('guru')}
-              className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-            >
-              Guru
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemoCredentials('siswa')}
-              className="px-3 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
-            >
-              Siswa
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemoCredentials('ortu')}
-              className="px-3 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
-            >
-              Orang Tua
-            </button>
-          </div>
-        </div>
+      {/* Main Container */}
+      <div className="relative z-10 w-full max-w-6xl shadow-2xl overflow-hidden rounded-2xl">
+        <div className="grid md:grid-cols-2 gap-0">
+          
+          {/* Left Side - Background Image */}
+          <div className="relative min-h-[600px] flex flex-col justify-center items-center text-white p-12"
+            style={{
+              backgroundImage: 'url(/login-background.jpg)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundColor: '#0066cc'
+            }}>
+            
+            {/* Dark Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-900/50 via-blue-800/60 to-blue-900/70"></div>
 
-        {/* Login Form */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Username */}
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-                Username
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-gray-400" />
+            {/* Content */}
+            <div className="relative z-10 text-center w-full max-w-md">
+              {/* Logo */}
+              <div className="mb-8 flex justify-center">
+                <div className="bg-white p-4 rounded-2xl shadow-2xl">
+                  <Image 
+                    src="/logo_alazhar.png" 
+                    alt="SMA Islam Al Azhar 7 Sukoharjo" 
+                    width={280}
+                    height={70}
+                    className="w-full h-auto"
+                    priority
+                  />
                 </div>
-                <input
-                  id="username"
-                  name="username"
-                  type="text"
-                  required
-                  value={formData.username}
-                  onChange={handleInputChange}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Masukkan username"
-                />
+              </div>
+
+              {/* Welcome Text */}
+              <h1 className="text-5xl font-bold mb-4 drop-shadow-lg">
+                Selamat Datang
+              </h1>
+              <p className="text-xl font-medium mb-3 drop-shadow-md">
+                Learning Management System
+              </p>
+              <p className="text-xl font-bold mb-10 drop-shadow-md">
+                Generasi Mulia Islami Cemerlang
+              </p>
+
+              {/* Islamic Quote */}
+              <div className="bg-blue-900/50 backdrop-blur-sm border-l-4 border-orange-500 rounded-xl p-6 shadow-xl">
+                <p className="text-base italic leading-relaxed mb-2">
+                  &quot;Menuntut ilmu adalah kewajiban setiap muslim&quot;
+                </p>
+                <p className="text-sm drop-shadow-md">— HR. Ibnu Majah</p>
               </div>
             </div>
+          </div>
 
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+          {/* Right Side - White Card */}
+          <div className="bg-white flex items-center justify-center p-12">
+            <div className="w-full max-w-md">
+              
+              {/* Header */}
+              <div className="mb-10">
+                <h2 className="text-4xl font-bold mb-2" style={{ color: '#0066cc' }}>
+                  Masuk ke Akun Anda
+                </h2>
+                <p className="text-gray-600">
+                  Silakan masuk menggunakan kredensial Anda
+                </p>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleSubmit} className="space-y-6">
+                
+                {/* Username */}
+                <div>
+                  <label htmlFor="username" className="block text-sm font-bold text-gray-800 mb-2">
+                    Username
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <input
+                      id="username"
+                      name="username"
+                      type="text"
+                      required
+                      value={formData.username}
+                      onChange={handleInputChange}
+                      className="w-full pl-12 pr-4 py-3.5 border-2 border-gray-200 rounded-xl text-gray-700 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                      placeholder="Masukkan username"
+                    />
+                  </div>
                 </div>
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Masukkan password"
-                />
+
+                {/* Password */}
+                <div>
+                  <label htmlFor="password" className="block text-sm font-bold text-gray-800 mb-2">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      required
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      className="w-full pl-12 pr-12 py-3.5 border-2 border-gray-200 rounded-xl text-gray-700 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                      placeholder="Masukkan password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Error Message */}
+                {error && (
+                  <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3">
+                    <p className="text-sm text-red-600">{error}</p>
+                  </div>
+                )}
+
+                {/* Remember & Forgot */}
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Ingat Saya</span>
+                  </label>
+                  <a href="#" className="text-sm font-semibold hover:underline" style={{ color: '#0066cc' }}>
+                    Lupa Password?
+                  </a>
+                </div>
+
+                {/* Submit Button */}
                 <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-4 rounded-xl font-bold text-white text-lg uppercase tracking-wide shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background: 'linear-gradient(135deg, #ff8c00 0%, #ff7300 100%)'
+                  }}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                  {loading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Memproses...
+                    </div>
                   ) : (
-                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    'MASUK'
                   )}
                 </button>
+              </form>
+
+              {/* Footer */}
+              <div className="mt-8 text-center text-sm text-gray-500 space-y-1">
+                <p>© 2024 SMA Islam Al Azhar 7 Sukoharjo</p>
+                <p className="text-xs">Sistem Pembelajaran Digital</p>
               </div>
             </div>
+          </div>
 
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-sm text-red-600">{error}</p>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  Memproses...
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-5 h-5 mr-2" />
-                  Masuk
-                </>
-              )}
-            </button>
-          </form>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center">
-          <p className="text-xs text-gray-500">
-            Sistem Learning Management SMA Islam Al-Azhar 7 Sukoharjo
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            © 2025 - Dikembangkan untuk keperluan pendidikan
-          </p>
         </div>
       </div>
     </div>
